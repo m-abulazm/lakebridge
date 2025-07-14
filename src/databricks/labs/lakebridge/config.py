@@ -1,10 +1,8 @@
-from __future__ import annotations
-
 import logging
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from databricks.labs.blueprint.installation import JsonValue
 from databricks.labs.blueprint.tui import Prompts
@@ -31,11 +29,11 @@ class LSPConfigOptionV1:
     default: Any = None
 
     @classmethod
-    def parse_all(cls, data: dict[str, Any]) -> dict[str, list[LSPConfigOptionV1]]:
+    def parse_all(cls, data: dict[str, Any]) -> dict[str, list["LSPConfigOptionV1"]]:
         return {key: list(LSPConfigOptionV1.parse(item) for item in value) for (key, value) in data.items()}
 
     @classmethod
-    def parse(cls, data: Any) -> LSPConfigOptionV1:
+    def parse(cls, data: Any) -> "LSPConfigOptionV1":
         if not isinstance(data, dict):
             raise ValueError(f"Invalid transpiler config option, expecting a dict entry, got {data}")
         flag: str = data.get("flag", "")
@@ -79,7 +77,7 @@ class TranspileConfig:
     output_folder: str | None = None
     error_file_path: str | None = None
     sdk_config: dict[str, str] | None = None
-    skip_validation: bool | None = False
+    skip_validation: bool = False
     catalog_name: str = "remorph"
     schema_name: str = "transpiler"
     transpiler_options: JsonValue = None
@@ -89,30 +87,30 @@ class TranspileConfig:
         return Path(self.transpiler_config_path) if self.transpiler_config_path is not None else None
 
     @property
-    def input_path(self):
+    def input_path(self) -> Path:
         if self.input_source is None:
             raise ValueError("Missing input source!")
         return Path(self.input_source)
 
     @property
-    def output_path(self):
+    def output_path(self) -> Path | None:
         return None if self.output_folder is None else Path(self.output_folder)
 
     @property
-    def error_path(self):
+    def error_path(self) -> Path | None:
         return Path(self.error_file_path) if self.error_file_path else None
 
     @property
-    def target_dialect(self):
+    def target_dialect(self) -> Literal["databricks"]:
         return "databricks"
 
     @classmethod
-    def v1_migrate(cls, raw: dict) -> dict:
+    def v1_migrate(cls, raw: dict[str, Any]) -> dict[str, Any]:
         raw["version"] = 2
         return raw
 
     @classmethod
-    def v2_migrate(cls, raw: dict) -> dict:
+    def v2_migrate(cls, raw: dict[str, Any]) -> dict[str, Any]:
         del raw["mode"]
         key_mapping = {"input_sql": "input_source", "output_folder": "output_path", "source": "source_dialect"}
         raw["version"] = 3

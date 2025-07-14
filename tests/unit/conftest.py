@@ -2,8 +2,7 @@ import io
 import re
 import shutil
 from pathlib import Path
-from collections.abc import Sequence, AsyncGenerator
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator, Sequence
 from unittest.mock import create_autospec
 
 import pytest
@@ -222,7 +221,7 @@ def path_to_resource(*args: str) -> str:
 
 
 @pytest.fixture
-def mock_workspace_client():
+def mock_workspace_client() -> WorkspaceClient:
     state = {
         "/Users/foo/.lakebridge/config.yml": yaml.dump(
             {
@@ -408,7 +407,16 @@ def input_source(tmp_path: Path) -> Generator[Path, None, None]:
 
 
 @pytest.fixture
+def empty_input_source(tmp_path: Path) -> Generator[Path, None, None]:
+    source_dir = tmp_path / "remorph_source"
+    source_dir.mkdir()
+    yield source_dir
+    safe_remove_dir(source_dir)
+
+
+@pytest.fixture
 def output_folder(tmp_path: Path) -> Generator[Path, None, None]:
+    # Only the parent of the output folder has to exist.
     output_dir = tmp_path / "remorph_transpiled"
     yield output_dir
     safe_remove_dir(output_dir)

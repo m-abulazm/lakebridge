@@ -1,6 +1,7 @@
 import asyncio
 import dataclasses
 import logging
+from email import policy
 from email.message import Message
 from email.parser import Parser as EmailParser
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import cast
 import itertools
 
 from databricks.labs.blueprint.installation import JsonObject
+from databricks.labs.blueprint.paths import read_text
 from databricks.labs.lakebridge.__about__ import __version__
 from databricks.labs.lakebridge.config import (
     TranspileConfig,
@@ -27,7 +29,6 @@ from databricks.labs.lakebridge.transpiler.transpile_status import (
     ErrorKind,
     ErrorSeverity,
 )
-from databricks.labs.lakebridge.helpers.string_utils import remove_bom
 from databricks.labs.lakebridge.helpers.validation import Validator
 from databricks.labs.lakebridge.transpiler.sqlglot.sqlglot_engine import SqlglotEngine
 from databricks.sdk import WorkspaceClient
@@ -61,15 +62,14 @@ async def _process_one_file(context: TranspilingContext) -> tuple[int, list[Tran
         )
         return 0, [error]
 
-    with context.input_path.open("r") as f:
-        source_code = remove_bom(f.read())
-        context = dataclasses.replace(context, source_code=source_code)
+    source_code = read_text(context.input_path)
+    context = dataclasses.replace(context, source_code=source_code)
 
     transpile_result = await _transpile(
         context.transpiler,
         str(context.config.source_dialect),
         context.config.target_dialect,
-        str(context.source_code),
+        source_code,
         context.input_path,
     )
 
@@ -80,8 +80,9 @@ async def _process_one_file(context: TranspilingContext) -> tuple[int, list[Tran
     error_list = list(transpile_result.error_list)
     context = dataclasses.replace(context, transpiled_code=transpile_result.transpiled_code)
 
-    output_path = cast(Path, context.output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path = context.output_path
+    assert output_path is not None, "Output path must be set in the context"
+    output_path.parent.mkdir(exist_ok=True)
 
     if _is_combined_result(transpile_result):
         _process_combined_result(context, error_list)
@@ -97,7 +98,8 @@ def _is_combined_result(result: TranspileResult):
 
 def _process_combined_result(context: TranspilingContext, _error_list: list[TranspileError]) -> None:
     # TODO error handling
-    parser = EmailParser()
+    # Added policy to process quoted-printable encoded
+    parser = EmailParser(policy=policy.default)
     transpiled_code: str = cast(str, context.transpiled_code)
     message: Message = parser.parsestr(transpiled_code)
     for part in message.walk():
@@ -106,13 +108,18 @@ def _process_combined_result(context: TranspilingContext, _error_list: list[Tran
 
 def _process_combined_part(context: TranspilingContext, part: Message) -> None:
     if part.get_content_type() != "text/plain":
-        return
+        return  # TODO Need to handle other content types, e.g., text/binary, application/json, etc.
     filename = part.get_filename()
-    content = part.get_payload(decode=False)
+    payload = part.get_payload(decode=True)
+    charset = part.get_content_charset() or "utf-8"
+    if isinstance(payload, bytes):
+        content = payload.decode(charset)
+    else:
+        content = str(payload)
     logger.debug(f"Processing file: {filename}")
 
-    if not filename or not isinstance(content, str):
-        return
+    if not filename:
+        return  # TODO Raise exception!!!!
     filename = Path(filename).name
     folder = context.output_folder
     segments = filename.split("/")
@@ -120,7 +127,8 @@ def _process_combined_part(context: TranspilingContext, part: Message) -> None:
         folder = folder / segment
         folder.mkdir(parents=True, exist_ok=True)
     output = folder / segments[-1]
-    output.write_text(content, "utf-8")
+    logger.debug(f"Writing output to: {output}")
+    output.write_text(content)
 
 
 def _process_single_result(context: TranspilingContext, error_list: list[TranspileError]) -> None:
@@ -150,7 +158,9 @@ def _process_single_result(context: TranspilingContext, error_list: list[Transpi
 
     output_path = cast(Path, context.output_path)
     with output_path.open("w") as w:
-        w.write(make_header(context.input_path, error_list))
+        # The above adds a java-style comment block at the top of the output file
+        # This would break .py or .json outputs so we disable it for now.
+        # w.write(make_header(context.input_path, error_list))
         w.write(output_code)
 
     logger.info(f"Processed file: {context.input_path} (errors: {len(error_list)})")
