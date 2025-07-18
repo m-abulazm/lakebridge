@@ -1,0 +1,53 @@
+---
+title: BladeBridge Configurations
+sidebar_position: 4
+---
+
+import CodeBlock from '@theme/CodeBlock';
+
+## Overview
+
+While the **BladeBridge** converter comes as a standalone executable, its operation relies heavily on rules defined inside configuration files provided with the converter.  These configurations are comprised of a set of layered json files and code templates that drive the generation of output files and application of conversion rules.
+
+Similar configuration concepts are applicable across all BladeBridge converters, although the structure of SQL-to-SQL configuration files and ETL-to-Pyspark/SparkSQL/DBSQL is somewhat different, since ETL conversions typically deal with both the ETL logic translations, as well as the translation of embedded SQL statements (sourcing data, pre/post/inline SQL statements)
+
+## Rationale for Understanding the Configuration Files
+
+In some migration projects, users may want to deviate from the conversion patterns embedded into BladeBridge.  For this reason, engineers should know how to:
+- Extend the converter logic
+- Provide your own conversion rules
+- Custom-control the output
+- Troubleshoot issues
+
+## Configuration Entry Points
+For each source and target technology combination, BladeBridge uses the file tech_mapper_main.json.  For example, it may have an entry for Synapse to Databricks SQL conversion, or for InfaPC to Pyspark or SparkSQL conversion.  These are the entry point configurations that in some cases branch out to other configuration files or inherit from base files.
+
+## Basic Converter Rules
+
+When it comes to converting individual SQL code snippets or ETL expressions, BladeBridge uses basic set of rules to trap certain source patterns and produce converted output.
+The three main types of syntax manipulation rules are
+- line_subst
+- block_subst
+- function_subst
+
+Example:
+```json
+{
+  "line_subst": [
+    { "from": "\bvarchar\b", "to": "string" },
+    { "from": "\bSYSDATE\b", "to": "CURRENT_TIMESTAMP()" }
+  ],
+  "block_subst": [
+    { "from": "\bSET\\s+\w+\s+ON\b", "to": "" },
+    { "from": "\bCREATE\s+VIEW\b", "to": "CREATE OR REPLACE VIEW" }
+  ],
+  "function_subst": [
+    { "from": "CONVERT", "output_template": "CAST($2 AS $1)", "num_args": 2 },
+    { "from": "ISNULL", "to": "COALESCE" }
+  ]
+}
+```
+
+
+### line_subst
+
