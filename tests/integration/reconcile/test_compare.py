@@ -57,9 +57,9 @@ def test_compare_data_for_report_all(
         mismatch=mismatch,
     )
 
-    assertDataFrameEqual(actual.mismatch.mismatch_df, expected.mismatch.mismatch_df)
-    assertDataFrameEqual(actual.missing_in_src, expected.missing_in_src)
-    assertDataFrameEqual(actual.missing_in_tgt, expected.missing_in_tgt)
+    assertDataFrameEqual(actual.mismatch.mismatch_df, expected.mismatch.mismatch_df)  # type: ignore
+    assertDataFrameEqual(actual.missing_in_src, expected.missing_in_src)  # type: ignore
+    assertDataFrameEqual(actual.missing_in_tgt, expected.missing_in_tgt)  # type: ignore
 
 
 def test_compare_data_for_report_hash(mock_spark, tmp_path: Path):
@@ -106,8 +106,8 @@ def test_compare_data_for_report_hash(mock_spark, tmp_path: Path):
 
     assert actual.mismatch.mismatch_df is None
     assert not actual.mismatch.mismatch_columns
-    assertDataFrameEqual(actual.missing_in_src, expected.missing_in_src)
-    assertDataFrameEqual(actual.missing_in_tgt, expected.missing_in_tgt)
+    assertDataFrameEqual(actual.missing_in_src, expected.missing_in_src)  # type: ignore
+    assertDataFrameEqual(actual.missing_in_tgt, expected.missing_in_tgt)  # type: ignore
 
 
 def test_capture_mismatch_data_and_cols(mock_spark):

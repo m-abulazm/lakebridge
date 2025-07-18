@@ -4,13 +4,13 @@ import logging
 from datetime import date, timedelta
 import zoneinfo
 import pandas as pd
-from databricks.labs.remorph.resources.assessments.synapse.common.functions import (
+from databricks.labs.lakebridge.resources.assessments.synapse.common.functions import (
     arguments_loader,
     insert_df_to_duckdb,
     get_config,
     get_synapse_artifacts_client,
 )
-from databricks.labs.remorph.resources.assessments.synapse.common.profiler_classes import SynapseWorkspace
+from databricks.labs.lakebridge.resources.assessments.synapse.common.profiler_classes import SynapseWorkspace
 
 
 def execute():

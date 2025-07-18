@@ -124,7 +124,11 @@ def get_synapse_jdbc_settings(config: dict):
         "fetch_size": "1000",
     }
 
-    auth_type = config.get("jdbc").get("auth_type")
+    if not config or not isinstance(config, dict):
+        raise ValueError("Invalid configuration provided")
+
+    # defensive programming for missing keys
+    auth_type = config.get("jdbc", {}).get("auth_type")
     if auth_type == "sql_authentication":
         return synapse_jdbc_sql_authentication
     elif auth_type == "ad_password_authentication":

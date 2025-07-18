@@ -1,18 +1,15 @@
 import json
 import sys
 import logging
-from databricks.labs.remorph.resources.assessments.synapse.common.functions import (
+from databricks.labs.lakebridge.resources.assessments.synapse.common.functions import (
     arguments_loader,
     get_config,
-    get_synapse_artifacts_client,
     save_resultset_to_db,
     get_serverless_database_groups,
     get_max_column_value_duckdb,
 )
-import zoneinfo
-from databricks.labs.remorph.resources.assessments.synapse.common.profiler_classes import SynapseWorkspace
-from databricks.labs.remorph.resources.assessments.synapse.common.queries import SynapseQueries
-from databricks.labs.remorph.resources.assessments.synapse.common.connector import (
+from databricks.labs.lakebridge.resources.assessments.synapse.common.queries import SynapseQueries
+from databricks.labs.lakebridge.resources.assessments.synapse.common.connector import (
     create_credential_manager,
     get_sqlpool_reader,
 )
@@ -31,10 +28,10 @@ def execute():
         synapse_workspace_settings = get_config(creds_file)["synapse"]
         synapse_profiler_settings = synapse_workspace_settings["profiler"]
         print(synapse_workspace_settings)
-        tz_info = synapse_workspace_settings["workspace"]["tz_info"]
-        workspace_tz = zoneinfo.ZoneInfo(tz_info)
-        artifacts_client = get_synapse_artifacts_client(synapse_workspace_settings)
-        workspace = SynapseWorkspace(workspace_tz, artifacts_client)
+        # tz_info = synapse_workspace_settings["workspace"]["tz_info"]
+        # workspace_tz = zoneinfo.ZoneInfo(tz_info)
+        # artifacts_client = get_synapse_artifacts_client(synapse_workspace_settings)
+        # workspace = SynapseWorkspace(workspace_tz, artifacts_client)
 
         if not synapse_profiler_settings.get("exclude_serverless_sql_pool", False):
 
@@ -42,7 +39,7 @@ def execute():
             database_query = SynapseQueries.list_databases()
             connection = get_sqlpool_reader(config, 'master', 'serverless_sql_endpoint')
             logger.info("Loading 'tables' for pool: %s", 'master')
-            print(f"Loading 'tables' for pool: 'master'")
+            print("Loading 'tables' for pool: 'master'")
             result = connection.execute(text(database_query))
             save_resultset_to_db(result, "serverless_databases", db_path, mode="overwrite")
 
