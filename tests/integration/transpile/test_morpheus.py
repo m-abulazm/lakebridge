@@ -38,4 +38,5 @@ async def _transpile_all_dbt_project_files(ws: WorkspaceClient, output_folder: P
     assert (output_folder / "top-query.sql").exists()
     assert (output_folder / "dbt_project.yml").exists()
     assert (output_folder / "sub" / "sub-query.sql").exists()
+    assert (output_folder / "sub" / "sub-query-bom.sql").exists()
     assert (output_folder / "sub" / "dbt_project.yml").exists()
