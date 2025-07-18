@@ -20,17 +20,28 @@ In some migration projects, users may want to deviate from the conversion patter
 - Troubleshoot issues
 
 ## Configuration Entry Points
-For each source and target technology combination, BladeBridge uses the file tech_mapper_main.json.  For example, it may have an entry for Synapse to Databricks SQL conversion, or for InfaPC to Pyspark or SparkSQL conversion.  These are the entry point configurations that in some cases branch out to other configuration files or inherit from base files.
+For each source and target technology combination, BladeBridge uses the file `tech_mapper_main.json`.  For example, it may have an entry for Synapse to Databricks SQL conversion, or for InfaPC to Pyspark or SparkSQL conversion.  These are the entry point configurations that in some cases branch out to other configuration files or inherit from base files.
+
+## Supplying Custom Entry Point Configuration
+When running the Bladebridge converter from Lakebridge, one can create a custom configuration file and supply it con the command line:
+```bash
+databricks labs lakebridge transpile --transpiler-config-path $HOME/project001/techX2Databricks.json
+```
+
+Please read the subsequent sections of this document to learn how to create and extend Bladebridge configurations
+
 
 ## Basic Converter Rules
 
 When it comes to converting individual SQL code snippets or ETL expressions, BladeBridge uses basic set of rules to trap certain source patterns and produce converted output.
-The three main types of syntax manipulation rules are
+The three main types of syntax manipulation rules are:
 - line_subst
 - block_subst
 - function_subst
 
-Example:
+They are executed in the order given above.  Within each of these sections, there is an array of rules that get executed based on the order they are listed.  Longer and more specific patterns should typically preceed shorter and more generic patterns.  E.g.: `"from" : "varchar"` should be listed before `"from" : "char"`, since `varchar` is a longer pattern than `char`.
+
+Sample configuration file snippet:
 ```json
 {
   "line_subst": [
@@ -42,7 +53,7 @@ Example:
     { "from": "\bCREATE\s+VIEW\b", "to": "CREATE OR REPLACE VIEW" }
   ],
   "function_subst": [
-    { "from": "CONVERT", "output_template": "CAST($2 AS $1)", "num_args": 2 },
+    { "from": "CONVERT", "output_template": "CAST($2 AS $1)", "num_args": 2 }, // here, $2 and $3 refer to the 2nd and 3rd arguments of the function call `convert`
     { "from": "ISNULL", "to": "COALESCE" }
   ]
 }
@@ -50,4 +61,33 @@ Example:
 
 
 ### line_subst
+Points to an array of substitution instructions to be performed on a single line. When this directive is given, the converter will apply all substitutions for each line. Each element of the array is a structure with the following elements.
+| Attribute                  | Purpose                                                                                                                                         | Example                                                                                   |
+|---------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
+| from                      | Specifies the pattern to capture. Use parentheses to capture tokens and substitute them.                                                        | "CREATE TABLE\s+(\w+)"<br/>In this case (\w+) represents the 1st token                    |
+| to                        | Specifies the pattern to replace with. Dollar variables from $1 to $9 are used to replace captured tokens.                                     | "CREATE OR REPLACE TABLE $1"<br/>Will plug in the table name from the example above       |
+| statement_categories      | Array of statement categories the rule is applicable to. If omitted, the rule applies to all matching patterns.                                | ["TABLE_DDL", "VIEW_DDL"]                                                                |
+| exact_match               | If set to "1", performs case-insensitive exact match instead of regex matching.                                                                 |                                                                                           |
+| first_match               | If set to "1" and a match occurs, stops checking for subsequent patterns in the line_subst array.                                               |                                                                                           |
+| exclude_categories        | List of excluded categories. Reverse of `statement_categories`.                                                                                   |                                                                                           |
+| extension_call            | Invokes an external routine instead of using the to pattern. Useful for complex logic. See the advanced section for details.                   |                                                                                           |
+| relative_fragment_pattern | Allows the pattern to be searched within specific code fragments supplied by relative_fragment_offset.                                          | "relative_fragment_pattern": "ACTIVITYCOUNT = 0"                                         |
+| relative_fragment_offset  | List of fragment offsets to search in when using relative_fragment_pattern.                                                                    | "relative_fragment_offset": "1,2"                                                        |
+| upcase_string | Upcases the output string | \{"from" : "#(\\w+)#", "to" : "$\{$1\}", "upcase_string" : true\} |
+
+
+
+> **Note:** In the `to` attribute, you can use tokens `$1` to `$9` to refer to regex match groups.
+
+**Example:**
+
+- **Source:**  
+  `#my_var# + 10 + p_curr_date_of_month`
+
+- **Rule:**  
+  ```json
+  {"from": "#(\\w+)#", "to": "${$1}", "upcase_string": true}
+
+- **Result:**  
+  `${MY_VAR} + 10 + p_curr_date_of_month`
 
