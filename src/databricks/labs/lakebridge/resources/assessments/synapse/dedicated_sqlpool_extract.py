@@ -1,7 +1,7 @@
 import json
 import sys
 import logging
-from databricks.labs.remorph.resources.assessments.synapse.common.functions import (
+from databricks.labs.lakebridge.resources.assessments.synapse.common.functions import (
     arguments_loader,
     get_config,
     get_synapse_artifacts_client,
@@ -9,9 +9,9 @@ from databricks.labs.remorph.resources.assessments.synapse.common.functions impo
     get_max_column_value_duckdb,
 )
 import zoneinfo
-from databricks.labs.remorph.resources.assessments.synapse.common.profiler_classes import SynapseWorkspace
-from databricks.labs.remorph.resources.assessments.synapse.common.queries import SynapseQueries
-from databricks.labs.remorph.resources.assessments.synapse.common.connector import (
+from databricks.labs.lakebridge.resources.assessments.synapse.common.profiler_classes import SynapseWorkspace
+from databricks.labs.lakebridge.resources.assessments.synapse.common.queries import SynapseQueries
+from databricks.labs.lakebridge.resources.assessments.synapse.common.connector import (
     create_credential_manager,
     get_sqlpool_reader,
 )

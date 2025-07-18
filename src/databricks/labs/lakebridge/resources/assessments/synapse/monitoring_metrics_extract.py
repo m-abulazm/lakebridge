@@ -5,11 +5,11 @@ import urllib3
 import zoneinfo
 import pandas as pd
 
-from databricks.labs.remorph.resources.assessments.synapse.common.profiler_classes import (
+from databricks.labs.lakebridge.resources.assessments.synapse.common.profiler_classes import (
     SynapseWorkspace,
     SynapseMetrics,
 )
-from databricks.labs.remorph.resources.assessments.synapse.common.functions import (
+from databricks.labs.lakebridge.resources.assessments.synapse.common.functions import (
     arguments_loader,
     insert_df_to_duckdb,
     get_config,
@@ -42,7 +42,7 @@ def execute():
         workspace_info = workspace.get_workspace_info()
         print(workspace_info)
 
-        if not "id" in workspace_info:
+        if "id" not in workspace_info:
             raise ValueError("ERROR: Missing Workspace ID for extracting Workspace Level Metrics")
         workspace_resource_id = workspace_info["id"]
         logger.info(f"workspace_resource_id  →  {workspace_resource_id}")
@@ -142,10 +142,10 @@ def execute():
                 if idx == 0:
                     spark_pools_df = spark_pool_metrics_df
                 else:
-                    spark_pools_df = pools_df.union(pool_metrics_df)
+                    spark_pools_df = spark_pools_df.union(spark_pool_metrics_df)
 
             # Insert the combined metrics into DuckDB
-            insert_df_to_duckdb(pools_df, db_path, step_name)
+            insert_df_to_duckdb(spark_pools_df, db_path, step_name)
             logger.info(">End")
 
         # This is the output format expected by the pipeline.py which orchestrates the execution of this script

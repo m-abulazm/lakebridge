@@ -1,18 +1,16 @@
 from pathlib import Path
 import yaml
-from databricks.labs.remorph.connections.credential_manager import (
+from databricks.labs.lakebridge.connections.credential_manager import (
     CredentialManager,
     LocalSecretProvider,
     EnvSecretProvider,
     DatabricksSecretProvider,
 )
 
-from databricks.labs.remorph.connections.env_getter import EnvGetter
-from databricks.labs.remorph.resources.assessments.synapse.common.functions import get_synapse_jdbc_settings
+from databricks.labs.lakebridge.connections.env_getter import EnvGetter
 from sqlalchemy import create_engine
-from sqlalchemy.engine import Engine, Result, URL
+from sqlalchemy.engine import URL
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import text
 
 
 def _load_credentials(path: Path) -> dict:
