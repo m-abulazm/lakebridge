@@ -5,7 +5,7 @@ import useBaseUrl from '@docusaurus/useBaseUrl';
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# Remorph Reconciliation
+# Reconcile Guide
 
 Reconcile is an automated tool designed to streamline the reconciliation process between source data and target data
 residing on Databricks. Currently, the platform exclusively offers support for Snowflake, Oracle and other Databricks
@@ -16,9 +16,9 @@ when comparing the source with the Databricks target.
 ### Execution Pre-Set Up
 >1. Setup the configuration file:
 
-Once the installation is done, a folder named **.remorph** will be created in the user workspace's home folder.
+Once the installation is done, a folder named **.lakebridge** will be created in the user workspace's home folder.
 To process the reconciliation for specific table sources, we must create a config file that gives the detailed required configurations for the table-specific ones.
-The file name should be in the format as below and created inside the **.remorph** folder.
+The file name should be in the format as below and created inside the **.lakebridge** folder.
 ```
 recon_config_<SOURCE>_<CATALOG_OR_SCHEMA>_<REPORT_TYPE>.json
 
@@ -34,28 +34,22 @@ eg:
 | source2     | tpch              | schema      | recon_config_source2_tpch_schema.json |
 
 
-``` bash
-TO BE FIXED
-#### Refer to [Reconcile Configuration Guide][def] for detailed instructions and [example configurations][config]
-
-[def]: docs/static/recon_configurations/README.md
-[config]: docs/static/recon_configurations/reconcile_config_samples.md
-```
+Refer to [Reconcile Configuration Guide](reconcile_configuration) for detailed instructions and [example configurations](example_config)
 
 > 2. Setup the connection properties
 
-Remorph-Reconcile manages connection properties by utilizing secrets stored in the Databricks workspace.
+Lakebridge-Reconcile manages connection properties by utilizing secrets stored in the Databricks workspace.
 Below is the default secret naming convention for managing connection properties.
 
 **Note: When both the source and target are Databricks, a secret scope is not required.**
 
-**Default Secret Scope:** remorph_data_source
+**Default Secret Scope:** lakebridge_data_source
 
 | source     | scope              |
 |------------|--------------------|
-| snowflake  | remorph_snowflake  |
-| oracle     | remorph_oracle     |
-| databricks | remorph_databricks |
+| snowflake  | lakebridge_snowflake  |
+| oracle     | lakebridge_oracle     |
+| databricks | lakebridge_databricks |
 
 Below are the connection properties required for each source:
 
@@ -90,12 +84,44 @@ Below are the connection properties required for each source:
     </TabItem>
 </Tabs>
 
+>3. Databricks permissions required
+
+- User configuring reconcile must have permission to create Data Warehouses
+- Additionally, the user must have `USE CATALOG` and `CREATE SCHEMA` permission in order to deploy metadata tables and
+dashboards that are created as part of the Reconcile output. If there is a pre-existing schema, the 'create volumes' permission is also required.
 
 
 ### Execution
-Execute the below command to initialize the reconcile process.
-```bash
- databricks labs remorph reconcile
-```
-<img src={useBaseUrl('img/recon-run.gif')} alt="reconcile-run" />
+You can execute the reconciliation process by executing the below command in a notebook cell.
 
+
+``` python
+from databricks.labs.lakebridge import __version__
+from databricks.sdk import WorkspaceClient
+
+from databricks.labs.lakebridge.reconcile.execute import recon
+from databricks.labs.lakebridge.reconcile.exception import ReconciliationException
+
+ws = WorkspaceClient(product="lakebridge", product_version=__version__)
+
+
+try:
+  result = recon(
+            ws = ws,
+            spark = spark, # notebook spark session
+            table_recon = table_recon, # previously created
+            reconcile_config = reconcile_config # previously created
+          )
+  print(result.recon_id)
+  print(result)
+except ReconciliationException as e:
+    recon_id = e.reconcile_output.recon_id
+    print(f" Failed : {recon_id}")
+    print(e)
+except Exception as e:
+    print(e.with_traceback)
+    raise e
+    print(f"Exception : {str(e)}")
+```
+
+for more details, refer to the [Reconcile Notebook](recon_notebook.mdx) documentation.

@@ -1,7 +1,7 @@
 import asyncio
 import dataclasses
 import logging
-import math
+from email import policy
 from email.message import Message
 from email.parser import Parser as EmailParser
 from pathlib import Path
@@ -9,6 +9,7 @@ from typing import cast
 import itertools
 
 from databricks.labs.blueprint.installation import JsonObject
+from databricks.labs.blueprint.paths import read_text
 from databricks.labs.lakebridge.__about__ import __version__
 from databricks.labs.lakebridge.config import (
     TranspileConfig,
@@ -28,7 +29,6 @@ from databricks.labs.lakebridge.transpiler.transpile_status import (
     ErrorKind,
     ErrorSeverity,
 )
-from databricks.labs.lakebridge.helpers.string_utils import remove_bom
 from databricks.labs.lakebridge.helpers.validation import Validator
 from databricks.labs.lakebridge.transpiler.sqlglot.sqlglot_engine import SqlglotEngine
 from databricks.sdk import WorkspaceClient
@@ -49,8 +49,9 @@ class TranspilingContext:
 
 
 async def _process_one_file(context: TranspilingContext) -> tuple[int, list[TranspileError]]:
+    input_path = context.input_path
 
-    logger.debug(f"Started processing file: {context.input_path!s}")
+    logger.debug(f"Started processing file: {input_path}")
 
     if not context.config.source_dialect:
         error = TranspileError(
@@ -62,15 +63,18 @@ async def _process_one_file(context: TranspilingContext) -> tuple[int, list[Tran
         )
         return 0, [error]
 
-    with context.input_path.open("r") as f:
-        source_code = remove_bom(f.read())
-        context = dataclasses.replace(context, source_code=source_code)
+    # Check if it looks like XML, where we need to sniff the encoding instead of relying on a BOM or defaulting to the
+    # local platform encoding.
+    sniff_xml_encoding = input_path.suffix.lower() == ".xml"
+
+    source_code = read_text(input_path, detect_xml=sniff_xml_encoding)
+    context = dataclasses.replace(context, source_code=source_code)
 
     transpile_result = await _transpile(
         context.transpiler,
         str(context.config.source_dialect),
         context.config.target_dialect,
-        str(context.source_code),
+        source_code,
         context.input_path,
     )
 
@@ -81,8 +85,9 @@ async def _process_one_file(context: TranspilingContext) -> tuple[int, list[Tran
     error_list = list(transpile_result.error_list)
     context = dataclasses.replace(context, transpiled_code=transpile_result.transpiled_code)
 
-    output_path = cast(Path, context.output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path = context.output_path
+    assert output_path is not None, "Output path must be set in the context"
+    output_path.parent.mkdir(exist_ok=True)
 
     if _is_combined_result(transpile_result):
         _process_combined_result(context, error_list)
@@ -98,7 +103,8 @@ def _is_combined_result(result: TranspileResult):
 
 def _process_combined_result(context: TranspilingContext, _error_list: list[TranspileError]) -> None:
     # TODO error handling
-    parser = EmailParser()
+    # Added policy to process quoted-printable encoded
+    parser = EmailParser(policy=policy.default)
     transpiled_code: str = cast(str, context.transpiled_code)
     message: Message = parser.parsestr(transpiled_code)
     for part in message.walk():
@@ -107,18 +113,27 @@ def _process_combined_result(context: TranspilingContext, _error_list: list[Tran
 
 def _process_combined_part(context: TranspilingContext, part: Message) -> None:
     if part.get_content_type() != "text/plain":
-        return
+        return  # TODO Need to handle other content types, e.g., text/binary, application/json, etc.
     filename = part.get_filename()
-    content = part.get_payload(decode=False)
-    if not filename or not isinstance(content, str):
-        return
+    payload = part.get_payload(decode=True)
+    charset = part.get_content_charset() or "utf-8"
+    if isinstance(payload, bytes):
+        content = payload.decode(charset)
+    else:
+        content = str(payload)
+    logger.debug(f"Processing file: {filename}")
+
+    if not filename:
+        return  # TODO Raise exception!!!!
+    filename = Path(filename).name
     folder = context.output_folder
     segments = filename.split("/")
     for segment in segments[:-1]:
         folder = folder / segment
         folder.mkdir(parents=True, exist_ok=True)
     output = folder / segments[-1]
-    output.write_text(content, "utf-8")
+    logger.debug(f"Writing output to: {output}")
+    output.write_text(content)
 
 
 def _process_single_result(context: TranspilingContext, error_list: list[TranspileError]) -> None:
@@ -127,14 +142,6 @@ def _process_single_result(context: TranspilingContext, error_list: list[Transpi
 
     if any(err.kind == ErrorKind.PARSING for err in error_list):
         output_code = context.source_code or ""
-
-    if error_list:
-        with_line_numbers = ""
-        lines = output_code.split("\n")
-        line_number_width = math.floor(math.log(len(lines), 10)) + 1
-        for line_number, line in enumerate(lines, start=1):
-            with_line_numbers += f"/* {line_number:{line_number_width}d} */  {line}\n"
-        output_code = with_line_numbers
 
     elif context.validator:
         logger.debug(f"Validating transpiled code for file: {context.input_path}")
@@ -156,38 +163,35 @@ def _process_single_result(context: TranspilingContext, error_list: list[Transpi
 
     output_path = cast(Path, context.output_path)
     with output_path.open("w") as w:
-        w.write(_make_header(context.input_path, error_list))
+        # The above adds a java-style comment block at the top of the output file
+        # This would break .py or .json outputs so we disable it for now.
+        # w.write(make_header(context.input_path, error_list))
         w.write(output_code)
 
     logger.info(f"Processed file: {context.input_path} (errors: {len(error_list)})")
 
 
-def _make_header(file_path: Path, errors: list[TranspileError]) -> str:
+def make_header(file_path: Path, errors: list[TranspileError]) -> str:
     header = ""
     failed_producing_output = False
-    diag_by_severity = {}
-    line_numbers = {}
+    diag_by_severity = {
+        severity.name: list(diags) for severity, diags in itertools.groupby(errors, key=lambda x: x.severity)
+    }
+    line_numbers: dict[int, int] = {}
 
-    for severity, diags in itertools.groupby(errors, key=lambda x: x.severity):
-        diag_by_severity[severity] = list(diags)
-
-    if ErrorSeverity.ERROR in diag_by_severity:
+    if ErrorSeverity.ERROR.name in diag_by_severity:
         header += f"/*\n    Failed transpilation of {file_path}\n"
         header += "\n    The following errors were found while transpiling:\n"
-        for diag in diag_by_severity[ErrorSeverity.ERROR]:
-            if diag.range:
-                line_numbers[diag.range.start.line] = 0
-            header += _append_diagnostic(diag)
-            failed_producing_output = failed_producing_output or diag.kind == ErrorKind.PARSING
+        header += _append_diagnostics(diag_by_severity[ErrorSeverity.ERROR.name], line_numbers)
+        failed_producing_output = failed_producing_output or any(
+            x.kind == ErrorKind.PARSING for x in diag_by_severity[ErrorSeverity.ERROR.name]
+        )
     else:
         header += f"/*\n    Successfully transpiled from {file_path}\n"
 
-    if ErrorSeverity.WARNING in diag_by_severity:
+    if ErrorSeverity.WARNING.name in diag_by_severity:
         header += "\n    The following warnings were found while transpiling:\n"
-        for diag in diag_by_severity[ErrorSeverity.WARNING]:
-            if diag.range:
-                line_numbers[diag.range.start.line] = 0
-            header += _append_diagnostic(diag)
+        header += _append_diagnostics(diag_by_severity[ErrorSeverity.WARNING.name], line_numbers)
 
     if failed_producing_output:
         header += "\n\n    Parsing errors prevented the converter from translating the input query.\n"
@@ -203,13 +207,29 @@ def _make_header(file_path: Path, errors: list[TranspileError]) -> str:
     return header.format(line_numbers=line_numbers)
 
 
-def _append_diagnostic(diag: TranspileError) -> str:
-    message = diag.message.replace("{", "{{").replace("}", "}}")
-    if diag.range:
-        line = diag.range.start.line
-        column = diag.range.start.character + 1
-        return f"      - [{{line_numbers[{line}]}}:{column}] {message}\n"
-    return f"      - {message}\n"
+def _append_diagnostics(diagnostics: list[TranspileError], line_numbers: dict) -> str:
+    header = ""
+    grouped_by_message = {msg: list(diags) for msg, diags in itertools.groupby(diagnostics, lambda x: x.message)}
+    for msg, occurrences in grouped_by_message.items():
+        for occurrence in occurrences:
+            if occurrence.range:
+                line_numbers.update({occurrence.range.start.line: 0})
+        header += _append_diagnostic(msg, occurrences)
+    return header
+
+
+def _append_diagnostic(msg: str, diags: list[TranspileError]) -> str:
+    positions = [
+        f"[{{line_numbers[{diag.range.start.line}]}}:{diag.range.start.character + 1}]" for diag in diags if diag.range
+    ]
+    message = msg.replace("{", "{{").replace("}", "}}").replace("/n", "\n        ")
+    result = f"      - {message}\n" if len(positions) != 1 else f"      - {positions[0]} {message}\n"
+    if len(positions) > 1:
+        positions_str = ", ".join(positions)
+        result += f"          Occurred {len(diags)} times at the following positions: {positions_str}\n"
+    elif len(diags) > 1:
+        result += f"          Occurred {len(diags)} times\n"
+    return result
 
 
 async def _process_many_files(
@@ -330,7 +350,7 @@ async def _do_transpile(
         msg = f"{config.input_source} does not exist."
         logger.error(msg)
         raise FileNotFoundError(msg)
-    logger.info(f"Transpiler results: {result}")
+    logger.debug(f"Transpiler results: {result}")
 
     if not config.skip_validation:
         logger.info(f"SQL validation errors: {result.validation_error_count}")

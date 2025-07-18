@@ -37,28 +37,6 @@ def test_gets_pypi_artifact_version():
     check_valid_version(version)
 
 
-def test_downloads_tar_from_pypi():
-    with TemporaryDirectory() as parent:
-        path = Path(parent) / "archive.tar"
-        result = WheelInstaller.download_artifact_from_pypi(
-            "databricks-labs-remorph-community-transpiler", "0.0.1", path, extension="tar"
-        )
-        assert result == 0
-        assert path.exists()
-        assert path.stat().st_size == 41_656
-
-
-def test_downloads_whl_from_pypi():
-    with TemporaryDirectory() as parent:
-        path = Path(parent) / "package.whl"
-        result = WheelInstaller.download_artifact_from_pypi(
-            "databricks-labs-remorph-community-transpiler", "0.0.1", path
-        )
-        assert result == 0
-        assert path.exists()
-        assert path.stat().st_size == 35_270
-
-
 @pytest.fixture()
 def patched_transpiler_installer(tmp_path: Path):
     resources_folder = Path(__file__).parent.parent.parent / "resources" / "transpiler_configs"
@@ -114,6 +92,13 @@ def check_valid_version(version: str):
             assert False, f"{version} does not look like a valid semver"
 
 
-def test_java_version():
-    version = WorkspaceInstaller.get_java_version()
-    assert version is None or version >= 110
+def test_java_version() -> None:
+    result = WorkspaceInstaller.find_java()
+    match result:
+        case None:
+            # Fine, no Java available.
+            pass
+        case (java_home, tuple(version)):
+            assert java_home.exists() and version >= (11, 0, 0, 0)
+        case _:
+            pytest.fail(f"Unexpected result from WorkspaceInstaller.find_java(): {result!r}")

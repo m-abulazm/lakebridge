@@ -15,6 +15,9 @@ commands:
         description: Source Directory to Analyze
       - name: report-file
         description: Name of (.xlsx) report file to write
+      - name: source-tech
+        description: Name of the Source System Technology you want to analyze
+        default: null
   - name: transpile
     description: Transpile SQL script to Databricks SQL
     flags:
@@ -25,7 +28,7 @@ commands:
         description: Dialect name
         default: null
       - name: input-source
-        description: Input SQL Folder or File
+        description: Input Script Folder or File
         default: null
       - name: output-folder
         description: Output Location For Storing Transpiled Code, defaults to input-source folder
