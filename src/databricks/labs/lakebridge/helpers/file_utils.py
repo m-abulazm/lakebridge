@@ -1,3 +1,5 @@
+import contextlib
+import os
 from pathlib import Path
 from collections.abc import Generator
 
@@ -53,12 +55,11 @@ def get_sql_file(input_path: str | Path) -> Generator[Path, None, None]:
                 yield filename
 
 
-def read_file(filename: str | Path) -> str:
-    """
-    Reads the contents of the given file and returns it as a string.
-    :param filename: Input File Path
-    :return: File Contents as String
-    """
-    # pylint: disable=unspecified-encoding
-    with Path(filename).open() as file:
-        return file.read()
+@contextlib.contextmanager
+def chdir(new_path: Path) -> Generator[None, None, None]:
+    saved_path = Path.cwd()
+    try:
+        os.chdir(new_path)
+        yield
+    finally:
+        os.chdir(saved_path)
