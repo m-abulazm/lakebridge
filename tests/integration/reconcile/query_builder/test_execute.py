@@ -301,6 +301,13 @@ def test_reconcile_data_with_mismatches_and_missing(
     assert actual_data_reconcile.missing_in_src_count == expected_data_reconcile.missing_in_src_count
     assert actual_data_reconcile.missing_in_tgt_count == expected_data_reconcile.missing_in_tgt_count
     assert actual_data_reconcile.mismatch.mismatch_columns == expected_data_reconcile.mismatch.mismatch_columns
+    assert actual_data_reconcile.mismatch.mismatch_df is not None
+    assert expected_data_reconcile.mismatch.mismatch_df is not None
+    assert actual_data_reconcile.missing_in_src is not None
+    assert expected_data_reconcile.missing_in_src is not None
+    assert actual_data_reconcile.missing_in_tgt is not None
+    assert expected_data_reconcile.missing_in_tgt is not None
+
     assertDataFrameEqual(actual_data_reconcile.mismatch.mismatch_df, expected_data_reconcile.mismatch.mismatch_df)
     assertDataFrameEqual(actual_data_reconcile.missing_in_src, expected_data_reconcile.missing_in_src)
     assertDataFrameEqual(actual_data_reconcile.missing_in_tgt, expected_data_reconcile.missing_in_tgt)
@@ -362,6 +369,7 @@ def test_reconcile_data_with_mismatches_and_missing(
     )
     assertDataFrameEqual(actual_schema_reconcile.compare_df, expected_schema_reconcile)
     assert actual_schema_reconcile.is_valid is True
+    assert actual_data_reconcile.threshold_output.threshold_df is not None
     assertDataFrameEqual(
         actual_data_reconcile.threshold_output.threshold_df,
         mock_spark.createDataFrame(
@@ -561,6 +569,8 @@ def test_reconcile_data_with_mismatch_and_no_missing(
     assert actual.mismatch.mismatch_columns == expected.mismatch.mismatch_columns
     assert actual.missing_in_src is None
     assert actual.missing_in_tgt is None
+    assert actual.mismatch.mismatch_df is not None
+    assert expected.mismatch.mismatch_df is not None
     assertDataFrameEqual(actual.mismatch.mismatch_df, expected.mismatch.mismatch_df)
 
 
