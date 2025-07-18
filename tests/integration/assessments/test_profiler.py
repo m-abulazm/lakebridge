@@ -3,10 +3,10 @@ from unittest.mock import patch
 
 import pytest
 
-from databricks.labs.remorph.assessments.profiler import Profiler
+from databricks.labs.lakebridge.assessments.profiler import Profiler
 
 
-def test_supported_source_technologies():
+def test_supported_source_technologies() -> None:
     """Test that supported source technologies are correctly returned"""
     profiler = Profiler()
     supported_platforms = profiler.supported_source_technologies()
@@ -14,7 +14,7 @@ def test_supported_source_technologies():
     assert "Synapse" in supported_platforms
 
 
-def test_profile_unsupported_platform():
+def test_profile_unsupported_platform() -> None:
     """Test that profiling an unsupported platform raises ValueError"""
     profiler = Profiler()
     with pytest.raises(ValueError, match="Unsupported platform: InvalidPlatform"):
@@ -22,11 +22,11 @@ def test_profile_unsupported_platform():
 
 
 @patch(
-    'databricks.labs.remorph.assessments.profiler._PLATFORM_TO_SOURCE_TECHNOLOGY',
+    'databricks.labs.lakebridge.assessments.profiler._PLATFORM_TO_SOURCE_TECHNOLOGY',
     {"Synapse": "tests/resources/assessments/pipeline_config_main.yml"},
 )
-@patch('databricks.labs.remorph.assessments.profiler.PRODUCT_PATH_PREFIX', Path(__file__).parent / "../../../")
-def test_profile_execution():
+@patch('databricks.labs.lakebridge.assessments.profiler.PRODUCT_PATH_PREFIX', Path(__file__).parent / "../../../")
+def test_profile_execution() -> None:
     """Test successful profiling execution using actual pipeline configuration"""
     profiler = Profiler()
     profiler.profile("Synapse")
@@ -34,10 +34,10 @@ def test_profile_execution():
 
 
 @patch(
-    'databricks.labs.remorph.assessments.profiler._PLATFORM_TO_SOURCE_TECHNOLOGY',
+    'databricks.labs.lakebridge.assessments.profiler._PLATFORM_TO_SOURCE_TECHNOLOGY',
     {"Synapse": "tests/resources/assessments/synapse/pipeline_config_main.yml"},
 )
-def test_profile_execution_with_invalid_config():
+def test_profile_execution_with_invalid_config() -> None:
     """Test profiling execution with invalid configuration"""
     with patch('pathlib.Path.exists', return_value=False):
         profiler = Profiler()

@@ -64,7 +64,7 @@ commands:
         default: null
   - name: configure-reconcile
     description: "Configure Necessary Reconcile Dependencies"
-  - name: execute-databse-profiler
+  - name: execute-database-profiler
     description: "[EXPERIMENTAL] Profile the source system database"
 
 

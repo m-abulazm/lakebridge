@@ -669,7 +669,7 @@ def analyze(w: WorkspaceClient, source_directory: str, report_file: str, source_
 
 
 @lakebridge.command()
-def database_profiler(w: WorkspaceClient):
+def execute_database_profiler(w: WorkspaceClient):
     """Run the Profiler"""
     with_user_agent_extra("cmd", "profiler")
     ctx = ApplicationContext(w)
