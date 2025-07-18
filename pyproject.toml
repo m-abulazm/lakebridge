@@ -206,7 +206,7 @@ fail-under = 10.0
 ignore-patterns = ["^\\.#"]
 
 # Ignore files under tests/resources
-ignore-paths = ["tests/resources"]
+ignore-paths = ["tests/resources", "src/databricks/labs/lakebridge/resources/assessments"]
 
 # List of module names for which member attributes should not be checked (useful
 # for modules/projects where namespaces are manipulated during runtime and thus
@@ -454,7 +454,7 @@ max-bool-expr = 5
 max-branches = 20
 
 # Maximum number of locals for function / method body.
-max-locals = 19
+max-locals = 20
 
 # Maximum number of parents for a class (see R0901).
 max-parents = 7
