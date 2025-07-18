@@ -1,7 +1,8 @@
 all: clean dev fmt lint test
 
 clean:
-	rm -rf .venv clean htmlcov .mypy_cache .pytest_cache .ruff_cache .coverage coverage.xml .python-version .direnv
+	rm -rf .direnv
+	rm -rf .venv clean htmlcov .mypy_cache .pytest_cache .ruff_cache .coverage coverage.xml .python-version
 
 setup_python:
 	@echo "You have selected python setup with pyenv. It will install pyenv on your system."
