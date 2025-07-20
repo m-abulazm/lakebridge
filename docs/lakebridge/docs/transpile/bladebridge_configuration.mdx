@@ -406,3 +406,109 @@ Specifies the subroutine to be used when `preprocess_file` is enabled.
 ```
 
 ## ETL Configuration Files
+
+ETL configuration files are typically more complex than plain SQL configuration files due to the nature of what they must control and generate.
+
+These files may contain:
+
+- Instructions for **output code generation**, including support for multiple output languages such as **Spark SQL** or **PySpark**
+- Rules for **styling the output**, such as:
+  - Including or omitting header comments
+  - Replicating the ETL job's original folder or directory structure
+- Guidance for handling **external sources and targets**, such as flat files or external tables
+- Embedded logic that instructs the converter **how to assemble the generated code**
+
+In addition to these structural and behavioral controls, ETL configuration files often contain **pointers to additional JSON files** that define how to process:
+
+- **ETL expressions** (e.g., transformation functions or variable assignments)
+- **Embedded SQL** inside the ETL components, such as:
+  - SQL within a `SELECT` statement of a source component
+  - `pre-SQL` or `post-SQL` snippets executed before or after data movement
+
+These supporting configuration files closely resemble the structure and purpose of SQL configuration files, but are scoped to **fragment-level transformations**, **function handling**, and **data manipulation tasks** commonly found in visual ETL platforms such as Informatica PowerCenter or IBM DataStage.
+
+ETL configuration thus serves as the orchestration layer that combines rule-based transformation with output formatting, system integration, and extensibility.
+
+### ETL Configuration Tags
+
+| Attribute                                     | Description                                                                            | Sample                                                                 |
+|:----------------------------------------------|:---------------------------------------------------------------------------------------|:-----------------------------------------------------------------------|
+| code_generation_module                        | Specifies which module to use for code generation.                                     | "CodeGeneration::SQL" or "CodeGeneration::PySpark"                                                 |
+| target_file_extension                         | Sets the extension of the generated code file.                                         | "py"                                                                     |
+| use_notebook_md                               | Indicates whether Databricks notebook markdown should be used.                         | 1                                                                      |
+| script_header                                 | Adds a code block at the start of the generated script, often for imports or metadata. | # Databricks notebook source\n from datetime import datetime       |
+| script_footer                                 | Adds a code block at the end of the generated script | quit()      |
+| rowid_expression                              | Specifies the expression used to compute a row ID.  This is needed for InfaPC because of the way InfaPC links nodes in a mapping                                     | xxhash64(%DELIMITED_COLUMN_LIST%) as %ROWID_COL_NAME%                  |
+| rowid_column_name | Name of the column containing rowid | source_record_id |
+| dataset_creation_method                       | Indicates whether datasets are created as CTEs or tables.  <br/>"TABLE" is typically used for lift and shift, but "CTE" can be used for custom dbt outputs                            | TABLE or CTE                                                                 |
+| table_creation_statement                      | Template for creating a temporary table from a SQL block.                              | %TABLE_NAME% = spark.sql (rf\"\"\"%INNER_SQL%\"\"\"%FORMAT_SPEC%)<br/> %TABLE_NAME%. createOrReplaceTempView(\"`%TABLE_NAME%`\")  |
+| ddl_statement_wrap                            | Wraps DDL statements in a Spark SQL invocation.                                        | spark.sql(f"""%INNER_SQL%"""%FORMAT_SPEC%).display()                   |
+| etl_converter_config_file                     | Points to a secondary config file for ETL expression conversion.                       | infa2databricks.json                                                   |
+| commands | section on how to generate various read and write statements for different system types | 
+| system_type_class | system type classifications | 
+| conform_source_columns | instructs the writer to generate column-conforming statement for sources |
+| conform_columns_call_template | template for conforming the column list | "%DF%_conformed_cols = \[%COLUMN_LIST%\]\n%DF% = DatabricksConversionSupplements. conform_df_columns(%DF%,%DF%_conformed_cols) | 
+| mapplet_class_name              | Class name used for mapplet functions                                                            | Mapplets                                   |
+| mapplet_function_name           | Function name format for mapplets                                                                | %MAPPLET_NAME%                             |
+| mapplet_code_indent             | General code indentation for mapplets                                                            |          (8 spaces)                        |
+| mapplet_pyspark_code_indent     | Indentation for multiline SQL inside mapplets                                                    |      (4 spaces)                            |
+| mapplet_header_template         | Path to the file containing the header template for the mapplet                                  | python_mapplet_header_template.py          |
+| mapplet_input_declaration       | Format string to define the Python function declaration for the mapplet                          | \n    def %MAPPLET_NAME%(%INPUT%):         |
+| mapplet_conclusion              | Code snippet added to conclude the mapplet implementation                                        |         #Implementation %MAPPLET_NAME% concluded\n\n |
+| mapplet_object_var_inject_format| Format for injecting object variable, typically for wrapping dynamic names in code               | """ + %OBJECT_NAME% + """                  |
+| mapplet_function_invocation     | Format used to invoke the mapplet function                                                       | Mapplets.%MAPPLET_NAME%(%INPUT%)           |
+| mapplet_instance_prefixes       | List of instance name prefixes to help identify and generate mapplet connection info             | ["sc_"]                                    |
+
+
+### system_type_class section
+This section represents a mapping of a system type to a class name, which will be later used in the `commands` section
+
+```json
+"system_type_class" : {
+	"ORACLE" : "RELATIONAL",
+	"MySQL" : "RELATIONAL",
+	"HIVE" : "RELATIONAL",
+	"DB2" : "RELATIONAL",
+	"TERADATA" : "RELATIONAL",
+	"REDSHIFT" : "RELATIONAL",
+	"Salesforce" : "SALEFORCE",
+	"TOOLKIT" : "RELATIONAL",
+	"FLATFILE" : "FILE_DELIMITED",
+	"FLAT FILE":"FILE",
+	"FLAT_FILE":"FILE",
+	"FILE WRITER":"FILE",
+	"DEFAULT" : "FILE_DELIMITED"
+}
+```
+
+### commands section
+This section holds templates on read and write instructions for each system class
+
+```json
+"commands" : {
+	"READER_FILE_DELIMITED": "spark.read.format('csv').option('header', 'true').load(rf'''%PATH%''')",
+	"READER_FILE_DELIMITED_EXTERNAL": "%NODE_NAME%_External = spark.read.format('csv').option('header', 'true').load(%PATH%)",
+	"READER_FILE_FIXED_WIDTH" : "raw_%NODE_NAME% = spark.read.text(f\"%PATH%\")\n%NODE_NAME% = raw_%NODE_NAME%.select(%SUBSTRING_SPEC%)",
+	"READER_RELATIONAL": "%NODE_NAME% = %SQL%\n%NODE_NAME% = spark.sql(%NODE_NAME%)",
+	"WRITER_FILE_DELIMITED": "%DF%.write.format('csv').option('header','%HEADER%').mode('overwrite').option('sep','%DELIMITER%').csv('%PATH%')",
+	"WRITER_RELATIONAL": "my_end_point.write_to_db(%DF%, \"%TABLE_NAME%\", username=\"%LOGIN%\", password=\"%PASSWORD%\")"
+},
+```
+
+### Substitution Tokens
+Templates above use the following placeholders that get substituted at conversion time:
+- `%DF%` - name of the dataframe
+- `%SQL%` - SQL content, such as the SELECT statement
+- `%PATH%` - Path of the file being processed
+- `%SUBSTRING_SPEC%` - Specifications generated by converter on splitting up a positional string into columns
+- `%HEADER%` - Header specification
+- `%LOGIN%` - System login
+- `%PASSWORD%` - System login
+
+### Mapplet, Joblet and Shared Containers Handling
+
+In ETL systems, it is common to encapsulate reusable logic into modular components such as maplets, joblets, or shared containers. To preserve this reusability during conversion, the converter attempts to replicate the structure and behavior of these components in the generated code.
+
+Configuration tags prefixed with mapplet define how this reusable logic should be represented and rendered in the output.
+
+The converter will generate a single class—specified by the JSON tag mapplet_class_name—in which all reusable code will be consolidated. This class serves as the container for all maplet-level function definitions and logic.
