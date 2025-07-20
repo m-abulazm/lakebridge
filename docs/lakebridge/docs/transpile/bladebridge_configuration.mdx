@@ -5,6 +5,7 @@ sidebar_position: 4
 
 import CodeBlock from '@theme/CodeBlock';
 
+
 ## Overview
 
 While the **BladeBridge** converter comes as a standalone executable, its operation relies heavily on rules defined inside configuration files provided with the converter.  These configurations are comprised of a set of layered json files and code templates that drive the generation of output files and application of conversion rules.
@@ -13,7 +14,7 @@ Similar configuration concepts are applicable across all BladeBridge converters,
 
 ## Rationale for Understanding the Configuration Files
 
-In some migration projects, users may want to deviate from the conversion patterns embedded into BladeBridge.  For this reason, engineers should know how to:
+In some migration projects, users may want to deviate from the conversion rules provided by BladeBridge.  For this reason, engineers should know how to:
 - Extend the converter logic
 - Provide your own conversion rules
 - Custom-control the output
@@ -21,6 +22,8 @@ In some migration projects, users may want to deviate from the conversion patter
 
 ## Configuration Entry Points
 For each source and target technology combination, BladeBridge uses the file `tech_mapper_main.json`.  For example, it may have an entry for Synapse to Databricks SQL conversion, or for InfaPC to Pyspark or SparkSQL conversion.  These are the entry point configurations that in some cases branch out to other configuration files or inherit from base files.
+
+When the source and target technologies are specified at the Lakebridge prompt or on the command line, Lakebridge will choose the appropriate file to pass to the Bladebridge converter
 
 ## Supplying Custom Entry Point Configuration
 When running the Bladebridge converter from Lakebridge, one can create a custom configuration file and supply it con the command line:
@@ -91,3 +94,315 @@ Points to an array of substitution instructions to be performed on a single line
 - **Result:**  
   `${MY_VAR} + 10 + p_curr_date_of_month`
 
+
+### block_subst
+Points to an array of substitution instructions to be performed on a statement block. When this directive is given, the converter will apply all substitutions for each statement block. This instruction is useful when there is a need to restructure a block of code – e.g. move around clauses of a statement, or when there's a high likelihood that a pattern will span multiple lines.  Note that a block of code is typically referred to an entire SQL statement, such a DML inside a stored procedure or a view or table definition.  Prior to processing a SQL content, theconverter will split up a multi-statement content into series of blocks and operate on each block of code individually.
+
+> **Note:** while block_subst rules operate in a very similar manner to line_subst rules, they are costlier in terms of compute time.  For this reason, it is better not to overload the block_subst section with rules that are simple and typically defined on a single line.  E.g.: converting varchar to string should be done in line_subst, and not in block_subst.
+
+Each element of the rules array is a structure with the following elements.
+
+| Attribute                  | Purpose                                                                                                                                                                           | Example                                                                                   |
+|---------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
+| from                      | Specifies the pattern to capture. Use parentheses to capture tokens and substitute them.                                                                                         | "CREATE TABLE\\s+(\\w+)"<br/>In this case (\w+) represents the 1st token                  |
+| to                        | Specifies the pattern to replace with. Dollar variables from $1 to $9 can be used to replace captured tokens.                                                                   | "CREATE OR REPLACE TABLE $1"<br/>Will plug in the name of the table from the example     |
+| statement_categories      | Array of statement categories the rule is applicable to. If omitted, the rule applies to all matching patterns.                                                                 | ["TABLE_DDL", "VIEW_DDL"]                                                                |
+| first_match               | If set to "1" and a match occurs, stops checking for subsequent patterns in the line_subst array.                                                                                |                                                                                           |
+| catch_implicit_object_reference | (No description provided – please add if needed.)                                                                                                                      |                                                                                           |
+| extension_call            | Invokes an external custom routine instead of substituting with the target pattern. Useful for complex logic. See the advanced section for more details.                      |                                                                                           |
+| force_alias_usage         | Enforces usage of aliases in WHERE, SELECT, and JOIN clauses. Ensures references to base objects are replaced with aliases where required by the target database.              |                                                                                           |
+| relative_fragment_pattern | Searches for the pattern within specific code fragments defined using `relative_fragment_offset`.                                                                                | "relative_fragment_pattern": "ACTIVITYCOUNT = 0"                                         |
+| relative_fragment_offset  | A list of fragment offsets to search when using `relative_fragment_pattern`.                                                                                                     | "relative_fragment_offset": "1,2"                                                        |
+| debug_tag | Specifies a debug tag, which will show in the log when running the converter in verbose mode| \{"from" : "stringA", "to" : "stringB", "debug_tab" : "RULE001\}|
+
+
+**Example:**
+
+- **Source:**  
+  `SELECT V_TOTAL = COUNT(*) FROM orders;`
+
+- **Rule:**  
+  ```json
+  {"from" : "\bSELECT\s+(V_\w+)(\s*\=.*)\;", "to" : "SET $1 = (SELECT $2 limit 1);"}
+
+- **Result:**  
+  `SET V_TOTAL = (SELECT = COUNT(*) FROM orders limit 1);
+`
+
+### function_subst
+
+Points to an array of instructions responsible for altering function calls. This section is used when function translations are required, and/or function arguments (function signature) have to be altered.
+Each element of the array is a structure with the following elements.
+
+
+| Attribute                  | Purpose                                                                                                                                                                           | Example                                                                                   |
+|---------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
+| from                      | Specifies the name of the function in the source code.                                                                                                                           | "ISNULL"                                                                                  |
+| to                        | Specifies the name of the function to change to.  Use this if function name changes but the signature does not (args stay as they are)                                         | "COALESCE"                                                                                |
+| output_template           | A template for constructing the output function. Can use `$1`, `$2`, `%ALL_ARGS%`, etc.  This should be used when the "to" attribute cannot be used.                           | "CAST($2 AS $1)"                                                                          |
+| statement_categories      | Array of statement categories the rule is applicable to. If omitted, the rule applies to all matching patterns.                                                                 | ["SELECT", "UPDATE"]                                                                     |
+| placement                 | Placement of the converted clause. Allowed values: `append_inside_ddl`, `append_after_ddl`.                                                                                      | "append_inside_ddl"                                                                       |
+| extension_call            | Invokes an external routine to generate the new function string. Useful for complex cases.                                                                                      | "custom_subst_routine"                                                                    |
+| num_args                  | Only applies the rule when the number of arguments matches.                                                                                                                      | 2                                                                                         |
+| date_format_arg           | Specifies the argument position containing a date part keyword (e.g., "MM", "YYYY"). Works with `datepart_translations`.                                                        | 2                                                                                         |
+| arg_pattern               | Hash where keys are argument positions (1-based) and values are regex patterns they must match.                                                                                  | \{ 1: "^\\d+$" \}                                                                           |
+| upcase_args               | List of argument positions to convert to uppercase.                                                                                                                             | [1, 2]                                                                                    |
+| lowcase_args              | List of argument positions to convert to lowercase.                                                                                                                              | [3]                                                                                       |
+| skip_files                | List of filenames to skip for this rule.  This is the basename, as opposed to the full path                                                                                      | ["legacy_job.sql"]                                                                        |
+| relative_fragment_pattern | Restricts rule application to when this pattern is found in a nearby fragment.                                                                                                   | "ACTIVITYCOUNT = 0"                                                                       |
+| relative_fragment_offset  | Comma-separated offsets (relative to the current line) to search for `relative_fragment_pattern`.                                                                                | "1,2"                                                                                     |
+| arg_placement             | Hash to remap or reposition arguments; supports fallbacks like `2\|\|default`.  <br/>NOTE: Use output_template instead of this                                                        | \{ 1: "2", 2: "1\|\|NULL" \}                                                                |
+| full_subst                | Full substitution template using placeholders like `__ARG1__`, `__ARG2__`. Overrides normal argument logic.                                                                     | \"IFNULL(__ARG1__, __ARG2__)\"                                                              |
+| arg_token_output          | Specifies token positions to output when using token-based splitting.                                                                                                            | "1,3"                                                                                     |
+| split_string              | Delimiter to split arguments when using `arg_token_output`.                                                                                                                      | ";"                                                                                       |
+| new_arg_separator         | Overrides the default `,` separator when joining arguments in the output.                                                                                                        | "|"                                                                                       |
+| each_arg_routine          | A Perl routine to apply to each argument (e.g., transformation, cleaning).                                                                                                      | "uc"                                                                                      |
+| ending                    | A string to append after the function call (e.g., for syntax closure).                                                                                                           | ";"                                                                                       |
+
+**Special Keywords:**
+
+**\_\_BLANK\_\_** - blanks out the entire call including the function name.
+
+Example (removing INDEX clause): 
+```json
+{"from": "INDEX", "to": "__BLANK__", "statement_categories" : ["TABLE_DDL","TABLE_DDL_LIKE","TABLE_DDL_AS_SELECT"]},
+```
+
+> **Note:** In the `output_template` attribute, you can use tokens `$1` to `$9` to refer to regex match groups.  These token represent direct arguments to the function call being processed, which could include expressions or other nested function calls.
+
+Example when processing function SUBSTR:
+```sql
+SELECT SUBSTR(
+	UPPER( first_name || ' ' last_name ), -- arg $1
+	10, -- arg $2
+	20 -- arg $3
+	)
+```
+
+
+
+**\_\_ELIMINATE_CALL\_\_** - gets rid of the function name and surrounding parenthesis, leaving only the arguments in place.  
+
+Example (removing TRANSLATE call and leaving args): 
+```json
+{"from": "TRANSLATE", "to" : "__ELIMINATE_CALL__"}, //get rid of the function call with the parens, but leave the inner part
+```
+
+## Extended Converter Rules
+
+### inherit_from
+
+In real-world scenarios, it is often necessary to inherit rules or settings from shared configuration files into more specific ones. To support this, you can use the inherit_from directive, which allows a configuration file to reference a base or parent file. This enables layered rule definitions and promotes reuse and consistency across configurations.m
+
+
+`inherit_from` is an array pointing to JSON filenames that the current file inherits from. Multiple file inheritances are allowed. If the full path is supplied with a forward slash, then the converter will try to read the file specified with the full path. Otherwise, the converter will look for the file in the same folder as the current JSON file. 
+
+Example:
+```json
+"inherit_from":["general_sql_specs.json", "c:/Work/myProjects/project.json"]
+```
+
+Currently, all the SQL dialect configuration files (e.g. teradata, oracle, snowflake etc...) inherit from the file *general_sql_specs.json*
+
+
+### stmt_categorization_patterns
+As the converter processes statements, in some cases it needs to be aware of the type of the statement being processed, so he can include/exclude some rules or dispatch the processing to a custom routine.
+
+`stmt_categorization_patterns` is an array of entries that associate a coding pattern to the category. 
+
+Example:
+```json
+"stmt_categorization_patterns": [
+   {"category": "TABLE_DDL_AS_SELECT", "patterns" : ["CREATE(.*?)TABLE(.*?)AS\s*(.*SELECT", "CREATE(.*?)TABLE(.*?)AS\s*SELECT"]},
+   {"category": "TABLE_DDL_LIKE", "patterns" : ["CREATE(.*?)TABLE(.*?)AS(.*?)WITH\s+NO\s+DATA", "CREATE(.*?)TABLE(.*?)LIKE(.*)"]},
+   {"category": "TABLE_DDL", "patterns" : ["CREATE(.*?)\sTABLE"]},
+   {"category": "TABLE_DROP", "patterns" : ["DROP(.*?)\sTABLE"]},
+   {"category": "VIEW_DDL", "patterns" : ["CREATE(.*?)VIEW", "REPLACE(.*?)VIEW"]}
+]
+```
+
+Each category can support multiple patterns.
+Can be repeated and extended in inherited files: Yes
+This tag is currently provided in the base JSON file general_sql_specs.json.
+
+### datepart_translations
+
+Contains specifications on how to translate date part formatting specifications.  Sample specifications:
+```json
+"datepart_translations" : {
+	"YYYY" : "yyyy",
+	"mm" : "MM",
+	"DD" : "dd",
+	"hh24" : "hh",
+	"HH" : "hh",
+	"mi" : "mm",
+	"MI" : "mm",
+	"FF" : "SSSS",
+	"SS" : "ss",
+	"AM" : "a"
+}
+```
+Note: this is a case sensitive instruction.  It will be processed lengthier pattern first (yyyy goes before DD).
+This section is to be used with the function_subst modifier “date_format_arg”.
+
+## Advanced Conversion Rules
+
+Besides operating with prebuilt core functionality, the converter can delegate conversion logic to externally defined subroutines. This is often needed when converting not only SQL dialects, but also wrapper or flow control elements. An example of such requirement would be converting Netezza or Oracle procedures with conditional statements, loops and variables to Snowflake’s Javascript procedures.
+The language supported by the callback subroutines is basic-level Perl, making it easy to perform string operations and assemble and disassemble the code to be converted.
+The external subroutines are defined in a file or sets of files outside of the converter and can be registered in the converter configuration file using this instruction:
+
+```json
+"CUSTOM_CONVERTER_MODULES" : ["my_handlers.pl", "globals.pl"]
+```
+
+A good practice is to separate the configuration instructions that deal with “ornamentation” from the SQL dialect conversion instructions and have the former inherit from the latter. Example:
+Generic level file: general_sql_specs.json
+
+SQL Conversion level file: oracle2snowflake.json
+
+Procedural flow instructions file with callback function references: oracle2snowflake_javascript_procs.json
+
+The reason for such separation is that we can have a layer of instructions dealing specifically with SQL language conversion, and another layer dealing with the syntax of procedures to be generated.
+
+The Callback mechanism uses the instruction “fragment_handling” in the configuration file, which tells the converter how to dispatch the subroutine calls based on the category of a statement:
+
+```json
+"fragment_handling": {
+  "PROGRAM_DECLARATION": "::create_procedure_from_oracle",
+  "CREATE_PROCEDURE": "::create_procedure_from_oracle",
+  "END_PROCEDURE": "::end_procedure",
+  "COMMENT": "::convert_comment",
+  "VAR_ASSIGNMENT": "::convert_assignment",
+  "EXECUTE_INTO": "::execute_into",
+  "READ_DML_INTO_VAR": "::convert_assignment",
+  "WRITE_DML": "::convert_dml",
+  "UTIL_CALL": "::convert_dml",
+  "TABLE_DDL": "::convert_dml",
+  "DEFAULT_HANDLER": "::oracle_default_statement_handler"
+}
+```
+The names of the subroutines should be prefixed with two colons. This indicates to the processor that the subroutines live in the main namespace, as opposed to inside classes.
+
+Note that you can extend the section stmt_categorization_patterns anywhere in the inherited files to support custom fragment categories.
+
+The sections below list additional directives that are responsible for interacting with callback subs.
+
+
+### Hook and Extension Configuration
+
+#### `initialize_hooks_call`
+
+Calls the designated subroutine and passes two entries: the configuration structure and an instance of the converter class.
+
+```json
+"initialize_hooks_call": "::init_hooks"
+```
+
+This will invoke the `init_hooks` subroutine and pass:
+
+```perl
+{
+  CONFIG    => $config_entries_pointer,
+  CONVERTER => $converter_class_instance
+}
+```
+
+**Sample implementation:**
+
+```perl
+sub init_hooks {
+  my $param = shift;
+  %CFG = %{$param->{CONFIG}};
+  $CONVERTER = $param->{CONVERTER};
+  print "INIT_HOOKS Called. config:\n" . Dumper(%CFG);
+}
+```
+
+---
+
+#### `prescan_and_collect_info_hook`
+
+Used to pre-scan the input file before executing individual code fragment handling routines. This can be useful for extracting procedure parameters or other metadata from the file.
+
+```json
+"prescan_and_collect_info_hook": "::prescan_code_oracle"
+```
+
+**Sample implementation:**
+
+```perl
+sub prescan_code_oracle {
+  my $filename = shift;
+  my $cf = shift;
+  print "******** prescan_code_oracle $filename *********\n";
+  # Open and analyze the file...
+}
+```
+
+---
+
+#### Fragment Handling Custom Subroutines
+
+Each routine defined under the `fragment_handling` directive receives a pointer to an array of code lines relevant to a specific statement category.
+
+**Example:**
+
+For the statement:
+```sql
+UPDATE DIM_CUST
+SET CUST_FULL_NAME = FIRSTNAME || ' ' || LASTNAME
+```
+
+Assuming it's categorized as `WRITE_DML`, the handler could be:
+
+```perl
+sub convert_dml {
+  my $ar = shift; # pointer to array of code lines
+  my $sql = join("\n", @$ar); # full SQL block
+  # Custom logic here
+}
+```
+
+> The SQL Converter comes with working extension samples that can serve as templates for writing your own.
+
+---
+
+#### `pre_finalization_handler`
+
+Specifies a subroutine to run **after all fragment-handling routines are complete**.
+
+```json
+"pre_finalization_handler": "::finalize_content"
+```
+
+---
+
+#### `post_conversion_adjustment_hook`
+
+Specifies a subroutine to run **after `pre_finalization_handler` completes**.
+
+```json
+"post_conversion_adjustment_hook": "::post_conversion_adjustment"
+```
+
+---
+
+#### `preprocess_file`
+
+Enables pre-processing of the input file by triggering the routine defined in `preprocess_routine`.
+
+```json
+"preprocess_file": "1"
+```
+
+---
+
+#### `preprocess_routine`
+
+Specifies the subroutine to be used when `preprocess_file` is enabled.
+
+```json
+"preprocess_routine": "::mssql_preprocess"
+```
+
+## ETL Configuration Files
