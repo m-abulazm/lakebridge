@@ -639,11 +639,12 @@ def configure_reconcile(w: WorkspaceClient):
     with_user_agent_extra("cmd", "configure-reconcile")
     user = w.current_user
     logger.debug(f"User: {user}")
-    dbsql_id = _create_warehouse(w)
-    w.config.warehouse_id = dbsql_id
+    if not w.config.warehouse_id:
+        dbsql_id = _create_warehouse(w)
+        w.config.warehouse_id = dbsql_id
+    logger.debug(f"Warehouse ID used for configuring reconcile: {w.config.warehouse_id}.")
     installer = _installer(w)
     installer.run(module="reconcile")
-    _remove_warehouse(w, dbsql_id)
 
 
 @lakebridge.command()

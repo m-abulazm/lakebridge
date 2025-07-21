@@ -1,5 +1,76 @@
 # Version changelog
 
+## 0.10.5
+
+## Converters improvements
+
+### General
+
+- **XML Encoding Support**: The `_process_one_file` function now detects and correctly handles XML files with internally-specified encoding (e.g., Windows-1252), ensuring successful parsing and conversion of non-UTF-8 files in transformation pipelines. [[#1828]](https://github.com/databrickslabs/lakebridge/issues/1828)
+        
+- **Test Enhancements**: Updates to test cases (`test_transpiles_informatica_with_sparksql`, `test_transpiles_all_dbt_project_files`) were made to increase reliability and provide better logging. [[#1828]](https://github.com/databrickslabs/lakebridge/issues/1828)
+    
+### Morpheus transpiler
+
+- **Temporary and Transient Table Support Across Dialects**:
+    - Adds parsing and SQL generation for `TEMPORARY`, `TRANSIENT`, `VOLATILE`, and other table types.
+    - Databricks currently treats `TRANSIENT` tables as `TEMPORARY` (still in private preview); `READ ONLY` not yet supported.[](https://github.com/databrickslabs/lakebridge/pull/398)
+        
+- **Enhanced Support for T-SQL `SET` Statement Options**:
+    - Parsers now recognize `SET OPTION ON|OFF` and generate structured error messages for unsupported options.
+    - Adds support for finer-grained parsing of T-SQL options like `SET ANSI_NULLS`, `SET ARITHABORT`, etc.[](https://github.com/databrickslabs/lakebridge/pull/399)
+        
+- **Fix: CTEs in Subqueries**:
+    - Corrects issue where `WITH` clauses inside DDLs (e.g. `CREATE TABLE AS`) were previously ignored by not invoking the correct visitor.[](https://github.com/databrickslabs/lakebridge/pull/403)
+        
+- **IR Refinement for `CREATE` Commands**:
+    - Introduces a new `CreateCommand` node to better mirror SQL grammar, consolidating and simplifying previous IR structures (e.g., removing `ReplaceTable` and `ReplaceTableAsSelect`)
+        
+- **CREATE VIEW Implementation**:
+    - Implements the `createView` grammar and logic with visitor methods and meaningful error messages for unsupported options.[](https://github.com/databrickslabs/lakebridge/pull/408)
+        
+
+### BladeBridge Transpiler
+
+- **UPDATE to MERGE Logic**:
+    - Conversion logic for `UPDATE...FROM` to `MERGE` implemented
+    - **Post-processing Improvements**:    `convert_update_to_merge` function now ensures statement termination by checking for trailing semicolons.
+        
+- **Oracle Data Type Mapping Fixes**:
+    - `NUMBER` without precision now maps to `DECIMAL(38,18)` instead of `DECIMAL(10,0)`.
+    - Corrects `Timestamp` mapping and converts `Char(length)` to `STRING`.
+    - `SYSTIMESTAMP` is now translated to `CURRENT_TIMESTAMP()`
+        
+- **Datastage SET VARIABLE Handling**:
+    - Updates SET VARIABLE component transformation to behave like standard column expressions and prepends `SELECT` as required.[](https://github.com/databrickslabs/bladerunner/pull/409)
+---
+## Reconcile Improvements
+
+- **Use of Existing Warehouse During Configure-Reconcile**:
+    - The reconcile configuration now checks for an existing `warehouse_id` in the user's Databricks config.
+    - If present, it uses the existing SQL warehouse (with `CAN_USE` permission) instead of creating a new one.
+    - Logs warehouse details and defers deletion for reusability. [[#1825]](https://github.com/databrickslabs/lakebridge/issues/1825)
+        
+---
+## Documentation updates
+
+- **Databricks Auth Profiles and `--profile` Option**:
+    - Users can now specify which Databricks workspace to use with the `--profile` flag during installation.
+    - Adds command to list available profiles. [[#1813]](https://github.com/databrickslabs/lakebridge/issues/1813)
+        
+- **Export Instructions for Microsoft SQL Server and Azure Synapse**:
+    - Step-by-step guides added for extracting view, table, and procedure DDLs using:
+        - SQL Server Management Studio (SSMS),
+        - Azure Synapse Studio,
+        - PowerShell via `Export-AzSynapseSqlScript` for Synapse Serverless.
+    - Screenshots and Microsoft documentation links included. [[#1812]](https://github.com/databrickslabs/lakebridge/issues/1812)
+        
+
+## Dependency Updates:
+    - Updated `databricks-labs-blueprint` version.
+    - Added `pytest-timeout` for improved test reliability. [[#1828]](https://github.com/databrickslabs/lakebridge/issues/1828)
+
+
 ## 0.10.4
 
 * Added Source Tech Override for Analyzer ([#1806](https://github.com/databrickslabs/lakebridge/issues/1806)). The Analyzer command has been enhanced with a `source-tech` flag, allowing users to specify the Source System Technology to analyze directly in the command line call.

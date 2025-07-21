@@ -132,6 +132,24 @@ databricks labs lakebridge configure-reconcile
 ```
 <img src={useBaseUrl('img/recon-install.png')} alt="reconcile-configure" />
 
+
+### SQL Warehouse for Reconcile
+
+While configuring the reconcile properties, lakebridge by default creates a SQL warehouse. lakebridge uses user profile to authenticate to any Databricks resource and hence
+if the user running this command doesn't have permission to create SQL warehouse, the configure-reconcile would fail. In this case users can provide the 
+`warehouse_id` of an already created SQL warehouse that they have atleast CAN_USE permission on in the databricks profile (`~/.databrickscfg`) using which they
+are running the lakebridge commands and lakebridge would use that warehouse to complete the reconcile configuration instead of trying to create a new one.
+
+This is how the profile would look like:
+
+```bash
+[profile-name]
+host         = <your-workspace-url>
+...
+warehouse_id = <your-warehouse-id>
+```
+
+
 ### Verify Configuration
 Verify the successful configuration by executing the provided command; confirmation of a successful configuration is indicated when the displayed output aligns with the example screenshot provided:
 ```bash
