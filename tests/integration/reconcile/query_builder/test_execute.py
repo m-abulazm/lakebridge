@@ -311,7 +311,6 @@ def test_reconcile_data_with_mismatches_and_missing(
     assertDataFrameEqual(actual_data_reconcile.mismatch.mismatch_df, expected_data_reconcile.mismatch.mismatch_df)
     assertDataFrameEqual(actual_data_reconcile.missing_in_src, expected_data_reconcile.missing_in_src)
     assertDataFrameEqual(actual_data_reconcile.missing_in_tgt, expected_data_reconcile.missing_in_tgt)
-
     actual_schema_reconcile = Reconciliation(
         source,
         target,
@@ -368,7 +367,7 @@ def test_reconcile_data_with_mismatches_and_missing(
             ),
         ]
     )
-    assertDataFrameEqual(actual_schema_reconcile.compare_df, expected_schema_reconcile)  # type: ignore
+    assertDataFrameEqual(actual_schema_reconcile.compare_df, expected_schema_reconcile)
     assert actual_schema_reconcile.is_valid is True
     assert actual_data_reconcile.threshold_output.threshold_df is not None
     assertDataFrameEqual(
@@ -385,7 +384,6 @@ def test_reconcile_data_with_mismatches_and_missing(
             ]
         ),
     )
-    assertDataFrameEqual(actual_data_reconcile.threshold_output.threshold_df, mock_df)  # type: ignore
     assert actual_data_reconcile.threshold_output.threshold_mismatch_count == 1
 
 

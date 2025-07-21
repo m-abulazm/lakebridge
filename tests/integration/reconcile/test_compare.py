@@ -56,7 +56,7 @@ def test_compare_data_for_report_all(
         missing_in_tgt=missing_in_tgt,
         mismatch=mismatch,
     )
-    
+
     assert actual.mismatch.mismatch_df is not None
     assert expected.mismatch.mismatch_df is not None
     assert actual.missing_in_src is not None
