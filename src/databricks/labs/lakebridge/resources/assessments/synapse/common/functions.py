@@ -147,11 +147,37 @@ def get_azure_metrics_query_client():
 
 
 def save_resultset_to_db(result, table_name: str, db_path: str, mode: str, batch_size: int = 1000):
+    """
+    Enhanced version of save_resultset_to_db with predetermined schemas.
+    """
+
+    # Predetermined schemas
+    schemas = {
+        "columns": "CHARACTER_MAXIMUM_LENGTH BIGINT, CHARACTER_OCTET_LENGTH BIGINT, CHARACTER_SET_NAME VARCHAR, COLLATION_NAME VARCHAR, COLUMN_DEFAULT VARCHAR, COLUMN_NAME VARCHAR, DATA_TYPE VARCHAR, DATETIME_PRECISION BIGINT, IS_NULLABLE VARCHAR, NUMERIC_PRECISION BIGINT, NUMERIC_PRECISION_RADIX BIGINT, NUMERIC_SCALE BIGINT, ORDINAL_POSITION BIGINT, TABLE_CATALOG VARCHAR, TABLE_NAME VARCHAR, TABLE_SCHEMA VARCHAR, pool_name VARCHAR",
+        "routines": "CREATED VARCHAR, IS_DETERMINISTIC VARCHAR, IS_IMPLICITLY_INVOCABLE VARCHAR, IS_USER_DEFINED_CAST VARCHAR, LAST_ALTERED VARCHAR, MAX_DYNAMIC_RESULT_SETS BIGINT, ROUTINE_BODY VARCHAR, ROUTINE_CATALOG VARCHAR, ROUTINE_DEFINITION VARCHAR, ROUTINE_NAME VARCHAR, ROUTINE_SCHEMA VARCHAR, ROUTINE_TYPE VARCHAR, SCHEMA_LEVEL_ROUTINE VARCHAR, SPECIFIC_CATALOG VARCHAR, SPECIFIC_NAME VARCHAR, SPECIFIC_SCHEMA VARCHAR, SQL_DATA_ACCESS VARCHAR, pool_name VARCHAR",
+        "session_request": "classifier_name VARCHAR, command VARCHAR, command2 VARCHAR, command_type VARCHAR, command_w1 VARCHAR, command_w2 VARCHAR, database_id BIGINT, end_compile_time VARCHAR, end_time VARCHAR, error_id VARCHAR, extract_ts VARCHAR, group_name VARCHAR, importance VARCHAR, label VARCHAR, request_id VARCHAR, resource_allocation_percentage DOUBLE, resource_class VARCHAR, result_cache_hit BIGINT, session_id VARCHAR, start_time VARCHAR",
+        "sessions": "app_name VARCHAR, client_id_sha2 VARCHAR, extract_ts VARCHAR, is_transactional BOOLEAN, login_time VARCHAR, login_user VARCHAR, login_user_sha2 VARCHAR, login_user_type VARCHAR, query_count BIGINT, request_id VARCHAR, session_id VARCHAR, sql_spid BIGINT, status VARCHAR, pool_name VARCHAR",
+        "storage_info": "ReservedSpaceMB BIGINT, UsedSpaceMB BIGINT, extract_ts VARCHAR, node_id BIGINT, pool_name VARCHAR",
+        "tables": "TABLE_CATALOG VARCHAR, TABLE_NAME VARCHAR, TABLE_SCHEMA VARCHAR, TABLE_TYPE VARCHAR, pool_name VARCHAR",
+        "views": "CHECK_OPTION VARCHAR, IS_UPDATABLE VARCHAR, TABLE_CATALOG VARCHAR, TABLE_NAME VARCHAR, TABLE_SCHEMA VARCHAR, VIEW_DEFINITION VARCHAR, pool_name VARCHAR",
+        "metrics_dedicated_sql_pool_metrics": "average DOUBLE, maximum DOUBLE, minimum DOUBLE, name VARCHAR, pool_name VARCHAR, timestamp VARCHAR, total BIGINT",
+    }
+
     try:
         with duckdb.connect(db_path) as conn:
             columns = result.keys()
-            schema = ', '.join([f"{col} STRING" for col in columns])
-            print(f"schema: {schema} for table: {table_name}")
+
+            # Use predetermined schema if available, otherwise raise error
+            if table_name in schemas:
+                schema = schemas[table_name]
+                print(f"Using predetermined schema: {schema} for table: {table_name}")
+            else:
+                available_tables = list(schemas.keys())
+                error_msg = (
+                    f"Table '{table_name}' not found in predetermined schemas. Available tables: {available_tables}"
+                )
+                logging.error(error_msg)
+                raise ValueError(error_msg)
 
             # Fetch the first batch
             first_rows = result.fetchmany(batch_size)
