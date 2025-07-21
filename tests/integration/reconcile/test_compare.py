@@ -56,10 +56,16 @@ def test_compare_data_for_report_all(
         missing_in_tgt=missing_in_tgt,
         mismatch=mismatch,
     )
-
-    assertDataFrameEqual(actual.mismatch.mismatch_df, expected.mismatch.mismatch_df)  # type: ignore
-    assertDataFrameEqual(actual.missing_in_src, expected.missing_in_src)  # type: ignore
-    assertDataFrameEqual(actual.missing_in_tgt, expected.missing_in_tgt)  # type: ignore
+    
+    assert actual.mismatch.mismatch_df is not None
+    assert expected.mismatch.mismatch_df is not None
+    assert actual.missing_in_src is not None
+    assert expected.missing_in_src is not None
+    assert actual.missing_in_tgt is not None
+    assert expected.missing_in_tgt is not None
+    assertDataFrameEqual(actual.mismatch.mismatch_df, expected.mismatch.mismatch_df)
+    assertDataFrameEqual(actual.missing_in_src, expected.missing_in_src)
+    assertDataFrameEqual(actual.missing_in_tgt, expected.missing_in_tgt)
 
 
 def test_compare_data_for_report_hash(mock_spark, tmp_path: Path):
@@ -106,8 +112,13 @@ def test_compare_data_for_report_hash(mock_spark, tmp_path: Path):
 
     assert actual.mismatch.mismatch_df is None
     assert not actual.mismatch.mismatch_columns
-    assertDataFrameEqual(actual.missing_in_src, expected.missing_in_src)  # type: ignore
-    assertDataFrameEqual(actual.missing_in_tgt, expected.missing_in_tgt)  # type: ignore
+
+    assert actual.missing_in_src is not None
+    assert expected.missing_in_src is not None
+    assert actual.missing_in_tgt is not None
+    assert expected.missing_in_tgt is not None
+    assertDataFrameEqual(actual.missing_in_src, expected.missing_in_src)
+    assertDataFrameEqual(actual.missing_in_tgt, expected.missing_in_tgt)
 
 
 def test_capture_mismatch_data_and_cols(mock_spark):
@@ -166,6 +177,8 @@ def test_capture_mismatch_data_and_cols(mock_spark):
         ]
     )
 
+    assert actual.mismatch_df is not None
+    assert expected_df is not None
     assertDataFrameEqual(actual.mismatch_df, expected_df)
     assert sorted(actual.mismatch_columns) == ['s_acctbal', 's_name']
 
@@ -207,6 +220,8 @@ def test_capture_mismatch_data_and_cols_no_mismatch(mock_spark):
         ]
     )
 
+    assert actual.mismatch_df is not None
+    assert expected_df is not None
     assertDataFrameEqual(actual.mismatch_df, expected_df)
     assert sorted(actual.mismatch_columns) == []
 

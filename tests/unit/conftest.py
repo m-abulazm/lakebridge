@@ -36,7 +36,7 @@ def mock_databricks_config():
 
 
 @pytest.fixture()
-def transpile_config():
+def transpile_config() -> Generator[TranspileConfig, None, None]:
     yield TranspileConfig(
         transpiler_config_path="sqlglot",
         transpiler_options={"-experimental": True},

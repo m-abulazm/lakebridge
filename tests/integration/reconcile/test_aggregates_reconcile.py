@@ -152,7 +152,9 @@ def test_reconcile_aggregate_data_missing_records(
         assert actual[0].reconcile_output.mismatch_count == expected.mismatch_count
         assert actual[0].reconcile_output.missing_in_src_count == expected.missing_in_src_count
         assert actual[0].reconcile_output.missing_in_tgt_count == expected.missing_in_tgt_count
-        assertDataFrameEqual(actual[0].reconcile_output.mismatch.mismatch_df, expected.mismatch.mismatch_df)  # type: ignore
+        assert actual[0].reconcile_output.mismatch.mismatch_df is not None
+        assert expected.mismatch.mismatch_df is not None
+        assertDataFrameEqual(actual[0].reconcile_output.mismatch.mismatch_df, expected.mismatch.mismatch_df)
 
 
 def expected_rule_output():
