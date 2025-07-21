@@ -109,9 +109,7 @@ class PipelineClass:
             venv_python = venv_dir / "bin" / "python"
             venv_pip = venv_dir / "bin" / "pip"
 
-            logger.info(
-                f"Creating a virtual environment for Python script execution: ${venv_dir} for step: {step.name}"
-            )
+            logger.info(f"Creating a virtual environment for Python script execution: {venv_dir} for step: {step.name}")
             if step.dependencies:
                 self._install_dependencies(venv_pip, step.dependencies)
 
@@ -122,8 +120,35 @@ class PipelineClass:
         logging.info(f"Installing dependencies: {', '.join(dependencies)}")
         try:
             logging.debug("Upgrading local pip")
-            run([str(venv_pip), "install", "--upgrade", "pip"], check=True, stdout=DEVNULL, stderr=DEVNULL)
-            run([str(venv_pip), "install", *dependencies], check=True, stdout=DEVNULL, stderr=DEVNULL)
+            run(
+                [
+                    str(venv_pip),
+                    "install",
+                    "--upgrade",
+                    "pip",
+                    "--require-virtualenv",
+                    "--quiet",
+                    "--no-input",
+                    "--disable-pip-version-check",
+                ],
+                check=True,
+                stdout=DEVNULL,
+                stderr=DEVNULL,
+            )
+            run(
+                [
+                    str(venv_pip),
+                    "install",
+                    *dependencies,
+                    "--require-virtualenv",
+                    "--quiet",
+                    "--no-input",
+                    "--disable-pip-version-check",
+                ],
+                check=True,
+                stdout=DEVNULL,
+                stderr=DEVNULL,
+            )
         except CalledProcessError as e:
             logging.error(f"Failed to install dependencies: {e.stderr}")
             raise RuntimeError(f"Failed to install dependencies: {e.stderr}") from e
