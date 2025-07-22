@@ -75,30 +75,6 @@ class SnowflakeDataSource(DataSource, SecretsMixin, JDBCReaderMixin):
             f"&warehouse={self._get_secret('sfWarehouse')}&role={self._get_secret('sfRole')}"
         )
 
-    @staticmethod
-    def get_private_key(pem_private_key: str) -> str:
-        try:
-            private_key_bytes = pem_private_key.encode("UTF-8")
-            p_key = serialization.load_pem_private_key(
-                private_key_bytes,
-                password=None,
-                backend=default_backend(),
-            )
-            pkb = p_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption(),
-            )
-            pkb_str = pkb.decode("UTF-8")
-            # Remove the first and last lines (BEGIN/END markers)
-            private_key_pem_lines = pkb_str.strip().split('\n')[1:-1]
-            # Join the lines to form the base64 encoded string
-            private_key_pem_str = ''.join(private_key_pem_lines)
-            return private_key_pem_str
-        except Exception as e:
-            message = f"Failed to load or process the provided PEM private key. --> {e}"
-            logger.error(message)
-            raise InvalidSnowflakePemPrivateKey(message) from e
 
     def read_data(
         self,
@@ -160,7 +136,8 @@ class SnowflakeDataSource(DataSource, SecretsMixin, JDBCReaderMixin):
             "sfRole": self._get_secret('sfRole'),
         }
         try:
-            options["pem_private_key"] = SnowflakeDataSource.get_private_key(self._get_secret('pem_private_key'))
+            options["pem_private_key"] = SnowflakeDataSource.get_private_key(self._get_secret('pem_private_key'),
+                                                                             self._get_secret_or_none('pem_private_key_password'))
         except (NotFound, KeyError):
             logger.warning("pem_private_key not found. Checking for sfPassword")
             try:
@@ -171,3 +148,28 @@ class SnowflakeDataSource(DataSource, SecretsMixin, JDBCReaderMixin):
                 raise NotFound(message) from e
 
         return self._spark.read.format("snowflake").option("dbtable", f"({query}) as tmp").options(**options)
+
+    @staticmethod
+    def get_private_key(pem_private_key: str, pem_private_key_password: str | None) -> str:
+        try:
+            private_key_bytes = pem_private_key.encode("UTF-8")
+            p_key = serialization.load_pem_private_key(
+                private_key_bytes,
+                password=pem_private_key_password.encode("UTF-8") if pem_private_key_password else None,
+                backend=default_backend(),
+            )
+            pkb = p_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption(),
+            )
+            pkb_str = pkb.decode("UTF-8")
+            # Remove the first and last lines (BEGIN/END markers)
+            private_key_pem_lines = pkb_str.strip().split('\n')[1:-1]
+            # Join the lines to form the base64 encoded string
+            private_key_pem_str = ''.join(private_key_pem_lines)
+            return private_key_pem_str
+        except Exception as e:
+            message = f"Failed to load or process the provided PEM private key. --> {e}"
+            logger.error(message)
+            raise InvalidSnowflakePemPrivateKey(message) from e
