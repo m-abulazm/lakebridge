@@ -58,12 +58,16 @@ def generate_pkcs8_pem_key(malformed=False):
 def mock_private_key_secret(scope, key):
     if key == 'pem_private_key':
         return GetSecretResponse(key=key, value=base64.b64encode(generate_pkcs8_pem_key().encode()).decode())
+    if key == 'pem_private_key_password':
+        return GetSecretResponse(key=key, value=b''.decode())
     return mock_secret(scope, key)
 
 
 def mock_malformed_private_key_secret(scope, key):
     if key == 'pem_private_key':
         return GetSecretResponse(key=key, value=base64.b64encode(generate_pkcs8_pem_key(True).encode()).decode())
+    if key == 'pem_private_key_password':
+        return GetSecretResponse(key=key, value=b''.decode())
     return mock_secret(scope, key)
 
 
@@ -270,7 +274,7 @@ def test_get_schema_exception_handling():
         dfds.get_schema("catalog", "schema", "supplier")
 
 
-def test_read_data_with_out_options_private_key():
+def test_read_data_without_options_private_key():
     engine, spark, ws, scope = initial_setup()
     ws.secrets.get_secret.side_effect = mock_private_key_secret
     dfds = SnowflakeDataSource(engine, spark, ws, scope)
@@ -292,7 +296,7 @@ def test_read_data_with_out_options_private_key():
     spark.read.format().option().options().load.assert_called_once()
 
 
-def test_read_data_with_out_options_malformed_private_key():
+def test_read_data_without_options_malformed_private_key():
     engine, spark, ws, scope = initial_setup()
     ws.secrets.get_secret.side_effect = mock_malformed_private_key_secret
     dfds = SnowflakeDataSource(engine, spark, ws, scope)
@@ -301,7 +305,7 @@ def test_read_data_with_out_options_malformed_private_key():
         dfds.read_data("org", "data", "employee", "select 1 from :tbl", table_conf.jdbc_reader_options)
 
 
-def test_read_data_with_out_any_auth():
+def test_read_data_without_any_auth():
     engine, spark, ws, scope = initial_setup()
     ws.secrets.get_secret.side_effect = mock_no_auth_key_secret
     dfds = SnowflakeDataSource(engine, spark, ws, scope)
