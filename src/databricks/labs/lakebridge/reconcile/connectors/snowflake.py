@@ -1,6 +1,7 @@
 import logging
 import re
 from datetime import datetime
+import functools
 
 from pyspark.errors import PySparkException
 from pyspark.sql import DataFrame, DataFrameReader, SparkSession
@@ -126,6 +127,7 @@ class SnowflakeDataSource(DataSource, SecretsMixin, JDBCReaderMixin):
         except (RuntimeError, PySparkException) as e:
             return self.log_and_throw_exception(e, "schema", schema_query)
 
+    @functools.cache
     def reader(self, query: str) -> DataFrameReader:
         options = {
             "sfUrl": self._get_secret('sfUrl'),
@@ -153,9 +155,10 @@ class SnowflakeDataSource(DataSource, SecretsMixin, JDBCReaderMixin):
     def get_private_key(pem_private_key: str, pem_private_key_password: str | None) -> str:
         try:
             private_key_bytes = pem_private_key.encode("UTF-8")
+            password_bytes = pem_private_key_password.encode("UTF-8") if pem_private_key_password else None
             p_key = serialization.load_pem_private_key(
                 private_key_bytes,
-                password=pem_private_key_password.encode("UTF-8") if pem_private_key_password else None,
+                password_bytes,
                 backend=default_backend(),
             )
             pkb = p_key.private_bytes(
