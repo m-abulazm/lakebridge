@@ -12,6 +12,15 @@ from databricks.labs.lakebridge.transpiler.sqlglot.generator.databricks import D
 
 logger = logging.getLogger(__name__)
 
+SCHEMA_COMPARE_SCHEMA: StructType = StructType(
+    [
+        StructField("source_column", StringType(), False),
+        StructField("source_datatype", StringType(), False),
+        StructField("databricks_column", StringType(), True),
+        StructField("databricks_datatype", StringType(), True),
+        StructField("is_valid", BooleanType(), False),
+    ]
+)
 
 class SchemaCompare:
     def __init__(
@@ -19,17 +28,6 @@ class SchemaCompare:
         spark: SparkSession,
     ):
         self.spark = spark
-
-    # Define the schema for the schema compare DataFrame
-    _schema_compare_schema: StructType = StructType(
-        [
-            StructField("source_column", StringType(), False),
-            StructField("source_datatype", StringType(), False),
-            StructField("databricks_column", StringType(), True),
-            StructField("databricks_datatype", StringType(), True),
-            StructField("is_valid", BooleanType(), False),
-        ]
-    )
 
     @classmethod
     def _build_master_schema(
@@ -91,9 +89,9 @@ class SchemaCompare:
         databricks_query = f"create table dummy ({master.source_column} {master.databricks_datatype})"
         logger.info(
             f"""
-        Source datatype: create table dummy ({master.source_column} {master.source_datatype})
-        Parse datatype: {parsed_query}
-        Databricks datatype: {databricks_query}
+        Source query: create table dummy ({master.source_column} {master.source_datatype})
+        Parsed query: {parsed_query}
+        Databricks query: {databricks_query}
         """
         )
         if parsed_query.lower() != databricks_query.lower():
@@ -121,6 +119,6 @@ class SchemaCompare:
             elif master.source_datatype.lower() != master.databricks_datatype.lower():
                 master.is_valid = False
 
-        df = self._create_dataframe(master_schema, self._schema_compare_schema)
+        df = self._create_dataframe(master_schema, SCHEMA_COMPARE_SCHEMA)
         final_result = self._table_schema_status(master_schema)
         return SchemaReconcileOutput(final_result, df)
