@@ -304,7 +304,7 @@ def test_read_data_without_options_malformed_private_key():
     with pytest.raises(InvalidSnowflakePemPrivateKey, match="Failed to load or process the provided PEM private key."):
         dfds.read_data("org", "data", "employee", "select 1 from :tbl", table_conf.jdbc_reader_options)
 
-
+# FIXME https://github.com/databrickslabs/lakebridge/issues/1746 is tested
 def test_read_data_without_any_auth():
     engine, spark, ws, scope = initial_setup()
     ws.secrets.get_secret.side_effect = mock_no_auth_key_secret

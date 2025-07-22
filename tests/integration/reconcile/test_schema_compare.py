@@ -29,7 +29,7 @@ def snowflake_databricks_schema():
         Schema("col_timestamp_tz", "timestamp_tz(9)"),
         Schema("col_variant", "variant"),
         Schema("col_object", "object"),
-        Schema("col_array", "array"),
+        Schema("col_array", "array"), # FIXME https://github.com/databrickslabs/lakebridge/issues/1745 is tested
         Schema("col_geography", "geography"),
         Schema("col_num10", "number(10,1)"),
         Schema("col_dec", "number(20,2)"),
