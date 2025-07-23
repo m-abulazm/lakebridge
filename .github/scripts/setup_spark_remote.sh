@@ -34,7 +34,7 @@ fi
 cd "${spark}" || exit 1
 ## check spark remote is running,if not start the spark remote
 ## Temporary workaround for Spark Connect server still points to 3.5.5
-result=$(${SERVER_SCRIPT} --packages org.apache.spark:${spark_connect}:"3.5.5" > "$HOME"/spark/log.out; echo $?)
+result=$(${SERVER_SCRIPT} --conf spark.driver.bindAddress=127.0.0.1 --conf spark.driver.host=127.0.0.1 --packages org.apache.spark:${spark_connect}:"3.5.5" > "$HOME"/spark/log.out; echo $?)
 
 if [ "$result" -ne 0 ]; then
     count=$(tail "${HOME}"/spark/log.out | grep -c "SparkConnectServer running as process")
