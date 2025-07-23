@@ -36,30 +36,45 @@ class SchemaCompare:
         databricks_schema: list[Schema],
         table_conf: Table,
     ) -> list[SchemaMatchResult]:
-        master_schema = source_schema
-        if table_conf.select_columns:
-            master_schema = [schema for schema in master_schema if schema.column_name in table_conf.select_columns]
-        if table_conf.drop_columns:
-            master_schema = [sschema for sschema in master_schema if sschema.column_name not in table_conf.drop_columns]
+        master_schema = SchemaCompare._select_columns(source_schema, table_conf)
+        master_schema = SchemaCompare._drop_columns(master_schema, table_conf)
 
         target_column_map = table_conf.to_src_col_map or {}
+        databricks_types_map = {c.column_name: c.data_type for c in databricks_schema}
+
         master_schema_match_res = [
-            SchemaMatchResult(
-                source_column=s.column_name,
-                databricks_column=target_column_map.get(s.column_name, s.column_name),
-                source_datatype=s.data_type,
-                databricks_datatype=next(
-                    (
-                        tgt.data_type
-                        for tgt in databricks_schema
-                        if tgt.column_name == target_column_map.get(s.column_name, s.column_name)
-                    ),
-                    "",
-                ),
-            )
+            SchemaCompare.match_source_target_schemas(s, target_column_map, databricks_types_map)
             for s in master_schema
         ]
+
         return master_schema_match_res
+
+    @staticmethod
+    def _select_columns(master_schema: list[Schema], table_conf: Table):
+        if table_conf.select_columns:
+            return [schema for schema in master_schema if schema.column_name in table_conf.select_columns]
+        return master_schema
+
+    @staticmethod
+    def _drop_columns(master_schema: list[Schema], table_conf: Table):
+        if table_conf.drop_columns:
+            return [sschema for sschema in master_schema if sschema.column_name not in table_conf.drop_columns]
+        return master_schema
+
+    @staticmethod
+    def match_source_target_schemas(s: Schema,
+                                    target_column_map: dict,
+                                    databricks_schema_map: dict) -> SchemaMatchResult:
+        databricks_column_name = target_column_map.get(s.column_name, s.column_name)
+        databricks_datatype = databricks_schema_map.get(databricks_column_name, "Unknown")
+
+
+        return SchemaMatchResult(
+            source_column=s.column_name,
+            databricks_column=databricks_column_name,
+            source_datatype=s.data_type,
+            databricks_datatype=databricks_datatype
+        )
 
     def _create_dataframe(self, data: list, schema: StructType) -> DataFrame:
         """
@@ -73,29 +88,42 @@ class SchemaCompare:
         return df
 
     @classmethod
-    def _parse(cls, source: Dialect, column: str, data_type: str) -> str:
+    def _table_schema_status(cls, schema_compare_maps: list[SchemaMatchResult]) -> bool:
+        return bool(all(x.is_valid for x in schema_compare_maps))
+
+    @classmethod
+    def _validate_parsed_query(cls, source: Dialect, master: SchemaMatchResult) -> None:
+        source_query = f"create table dummy ({master.source_column} {master.source_datatype})"
+        parsed_query = cls._parse(source, source_query)
+        databricks_query = f"create table dummy ({master.source_column} {master.databricks_datatype})"
+        parsed_databricks_query = cls._parse_from_databricks(source, databricks_query)
+
+        logger.info(
+            f"""
+        Source query: {source_query}
+        Parsed query: {parsed_query}
+        Databricks query: {databricks_query}
+        """
+        )
+
+        if parsed_query.lower() != databricks_query.lower() and source_query.lower() != parsed_databricks_query.lower():
+            master.is_valid = False
+
+    @classmethod
+    def _parse(cls, source: Dialect, source_query: str) -> str:
         return (
-            parse_one(f"create table dummy ({column} {data_type})", read=source)
+            parse_one(source_query, read=source)
             .sql(dialect=get_dialect("databricks"))
             .replace(", ", ",")
         )
 
     @classmethod
-    def _table_schema_status(cls, schema_compare_maps: list[SchemaMatchResult]) -> bool:
-        return bool(all(x.is_valid for x in schema_compare_maps))
-
-    @classmethod
-    def _validate_parsed_query(cls, master: SchemaMatchResult, parsed_query) -> None:
-        databricks_query = f"create table dummy ({master.source_column} {master.databricks_datatype})"
-        logger.info(
-            f"""
-        Source query: create table dummy ({master.source_column} {master.source_datatype})
-        Parsed query: {parsed_query}
-        Databricks query: {databricks_query}
-        """
+    def _parse_from_databricks(cls, source: Dialect, databricks_query: str) -> str:
+        return (
+            parse_one(databricks_query, read=get_dialect("databricks"))
+            .sql(dialect=source)
+            .replace(", ", ",")
         )
-        if parsed_query.lower() != databricks_query.lower():
-            master.is_valid = False
 
     def compare(
         self,
@@ -114,8 +142,7 @@ class SchemaCompare:
         master_schema = self._build_master_schema(source_schema, databricks_schema, table_conf)
         for master in master_schema:
             if not isinstance(source, Databricks):
-                parsed_query = self._parse(source, master.source_column, master.source_datatype)
-                self._validate_parsed_query(master, parsed_query)
+                self._validate_parsed_query(source, master)
             elif master.source_datatype.lower() != master.databricks_datatype.lower():
                 master.is_valid = False
 
