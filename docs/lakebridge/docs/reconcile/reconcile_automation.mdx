@@ -20,10 +20,10 @@ The purpose of this utility is to automate table reconciliation based on provide
 ## Pre-requisites
 
 - The Lakebridge Recon tool should be configured through CLI to create the catalog (the name of the catalog can be customized during installation)
-- A volume is created inside `<remorph_catalog>.<remorph_schema>`
-- Ensure `table_configs` table is created inside `<remorph_catalog>.<remorph_schema>` with the below DDL. This table will store the configs for the tables that needs to be validated.
+- A volume is created inside `<lakebridge_catalog>.<lakebridge_schema>`
+- Ensure `table_configs` table is created inside `<lakebridge_catalog>.<lakebridge_schema>` with the below DDL. This table will store the configs for the tables that needs to be validated.
 ```sql
-CREATE TABLE <remorph_catalog>.<remorph_schema>.table_configs (
+CREATE TABLE <lakebridge_catalog>.<lakebridge_schema>.table_configs (
     label STRING,
     source_catalog STRING,
     source_schema STRING,
@@ -56,9 +56,9 @@ CREATE TABLE <remorph_catalog>.<remorph_schema>.table_configs (
 | **select_columns**    | `<optional>` The columns to be selected from the source table. This will initiate the lakebridge reconcile job to run the comparison including selected columns. |
 | **drop_columns**      | `<optional>` The columns to be dropped from the source table. This will initiate the lakebridge reconcile job to run the comparison including dropped columns. |
 
-- Ensure `table_recon_summary` table is created inside `<remorph_catalog>.<remorph_schema>` with the below DDL. This table will store the summary results of the validated tables.
+- Ensure `table_recon_summary` table is created inside `<lakebridge_catalog>.<lakebridge_schema>` with the below DDL. This table will store the summary results of the validated tables.
 ```sql
-CREATE TABLE <remorph_catalog>.<remorph_schema>.table_recon_summary (
+CREATE TABLE <lakebridge_catalog>.<lakebridge_schema>.table_recon_summary (
     timestamp TIMESTAMP,
     label STRING,
     databricks_catalog STRING,
@@ -113,9 +113,9 @@ The utility consists of three key Databricks notebooks:
 To run the utility, the following parameters must be set:
 
 - `label`: The label from the table table_configs which will be used as a filter for validating only selected tables with the specific label.
-- `remorph_catalog`: The catalog configured through CLI.
-- `remorph_schema`: The schema configured through CLI.
-- `remorph_config_table`: The table configs created as a part of the pre-requisites.
+- `lakebridge_catalog`: The catalog configured through CLI.
+- `lakebridge_schema`: The schema configured through CLI.
+- `lakebridge_config_table`: The table configs created as a part of the pre-requisites.
 - `secret_scope`: The Databricks secret scope for accessing the source system. Refer to the Lakebridge documentation for the specific keys required to be configured as per the source system.
 - `source_system`: The source system against which reconciliation is performed.
 - `table_recon_summary`: The target summary table created as a part of the pre-requisites.
@@ -123,7 +123,7 @@ To run the utility, the following parameters must be set:
 ## Points to Note
 
 The notebook `<source_system>_transformation_query_generator` needs to be created or modified as per the customer's source system
-The following rules are applied while performing validation. This can be customized as per customer's use case by doing the necessary changes in the Notebook remorph_recon_main
+The following rules are applied while performing validation. This can be customized as per customer's use case by doing the necessary changes in the Notebook lakebridge_recon_main
 - Given that the data types across platform would vary and fail the schema level checks, the overall validation will still be marked as passed based on the row and column level checks.
 - In case the primary keys are not configured in the table_configs, only row level checks will be performed to pass the validation.
 

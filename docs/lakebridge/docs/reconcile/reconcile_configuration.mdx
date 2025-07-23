@@ -94,7 +94,7 @@ flowchart TD
 [[back to top](#recon-config)]
 
 ## TABLE Config Json filename:
-The config file must be named as `recon_config_[DATA_SOURCE]_[SOURCE_CATALOG_OR_SCHEMA]_[REPORT_TYPE].json` and should be placed in the remorph root directory `.remorph` within the Databricks Workspace.
+The config file must be named as `recon_config_[DATA_SOURCE]_[SOURCE_CATALOG_OR_SCHEMA]_[REPORT_TYPE].json` and should be placed in the lakebridge root directory `.lakebridge` within the Databricks Workspace.
 
 > The filename pattern would remain the same for all the data_sources.
 
@@ -215,7 +215,7 @@ Please find the `Table Recon` filename examples below for the `Snowflake`, `Orac
 | Configuration Parameter | Data Type                | Description                                                                    | Requirement | Example Value                                                                                                                                           |
 |-------------------------|--------------------------|--------------------------------------------------------------------------------|-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `source_name`           | `string`                 | Source table name                                                              | Required    | <CodeBlock language="json">{`{"source_name": "product"}`}</CodeBlock>                                                                                   |
-| `target_name`           | `string`                 | Target table name                                                              | Required    | <CodeBlock language="json">{`{"source_name": "product"}`}</CodeBlock>                                                                                   |
+| `target_name`           | `string`                 | Target table name                                                              | Required    | <CodeBlock language="json">{`{"target_name": "product"}`}</CodeBlock>                                                                                   |
 | `aggregates`            | `list[Aggregate]`        | List of aggregation rules (see [Aggregate](#aggregate))                        | Optional    | <CodeBlock language="json">{`{"aggregates": {"type": "MAX", "agg_columns": ["price"]}}`}</CodeBlock>                                                    |
 | `join_columns`          | `list[string]`           | Primary key columns                                                            | Optional    | <CodeBlock language="json">{`{"join_columns": ["product_id", "order_id"]}`}</CodeBlock>                                                                 |
 | `jdbc_reader_options`   | `object`                 | JDBC read parallelization configuration                                        | Optional    | <CodeBlock language="json">{`{"jdbc_reader_options": {"number_partitions": 10, "partition_column": "id", "fetch_size": 1000}}`}</CodeBlock>             |
