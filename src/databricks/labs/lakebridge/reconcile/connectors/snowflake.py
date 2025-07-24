@@ -1,5 +1,6 @@
 import logging
 import re
+import urllib.parse
 from datetime import datetime
 import functools
 
@@ -60,21 +61,28 @@ class SnowflakeDataSource(DataSource, SecretsMixin, JDBCReaderMixin):
         self._ws = ws
         self._secret_scope = secret_scope
 
-    @property
+    @functools.cached_property
     def get_jdbc_url(self) -> str:
-        try:
-            sf_password = self._get_secret('sfPassword')
-        except (NotFound, KeyError) as e:
+        options = self._get_snowflake_options()
+
+        account = self._get_secret('sfAccount')
+        user = options.get("sfUser")
+        password = options.get("sfPassword")
+        database = options.get("sfDatabase")
+        schema = options.get("sfSchema")
+        warehouse = options.get("sfWarehouse")
+        role = options.get("sfRole")
+
+        if password is None:
             message = "sfPassword is mandatory for jdbc connectivity with Snowflake."
             logger.error(message)
-            raise NotFound(message) from e
+            raise NotFound(message)
 
-        return (
-            f"jdbc:{SnowflakeDataSource._DRIVER}://{self._get_secret('sfAccount')}.snowflakecomputing.com"
-            f"/?user={self._get_secret('sfUser')}&password={sf_password}"
-            f"&db={self._get_secret('sfDatabase')}&schema={self._get_secret('sfSchema')}"
-            f"&warehouse={self._get_secret('sfWarehouse')}&role={self._get_secret('sfRole')}"
-        )
+        encoded_user = urllib.parse.quote_plus(user)
+        encoded_password = urllib.parse.quote_plus(password)
+        jdbc_url = f"jdbc:{SnowflakeDataSource._DRIVER}://{account}.snowflakecomputing.com/?user={encoded_user}&password={encoded_password}"
+
+        return f"{jdbc_url}&db={database}&schema={schema}&warehouse={warehouse}&role={role}"
 
     def get_schema(
         self,
@@ -109,17 +117,17 @@ class SnowflakeDataSource(DataSource, SecretsMixin, JDBCReaderMixin):
         schema: str,
         table: str,
         query: str,
-        options: JdbcReaderOptions | None,
+        jdbc_options: JdbcReaderOptions | None,
     ) -> DataFrame:
         table_query = query.replace(":tbl", f"{catalog}.{schema}.{table}")
         try:
-            if options is None:
+            if jdbc_options is None:
                 df = self.reader(table_query).load()
             else:
-                options = self._get_jdbc_reader_options(options)
+                jdbc_options = self._get_jdbc_reader_options(jdbc_options)
                 df = (
                     self._get_jdbc_reader(table_query, self.get_jdbc_url, SnowflakeDataSource._DRIVER)
-                    .options(**options)
+                    .options(**jdbc_options)
                     .load()
                 )
             return df.select([col(column).alias(column.lower()) for column in df.columns])
@@ -127,11 +135,11 @@ class SnowflakeDataSource(DataSource, SecretsMixin, JDBCReaderMixin):
             return self.log_and_throw_exception(e, "data", table_query)
 
     def reader(self, query: str) -> DataFrameReader:
-        options = self._get_read_options()
+        options = self._get_snowflake_options()
         return self._spark.read.format("snowflake").option("dbtable", f"({query}) as tmp").options(**options)
 
     @functools.cache
-    def _get_read_options(self):
+    def _get_snowflake_options(self):
         options = {
             "sfUrl": self._get_secret('sfUrl'),
             "sfUser": self._get_secret('sfUser'),
@@ -140,11 +148,11 @@ class SnowflakeDataSource(DataSource, SecretsMixin, JDBCReaderMixin):
             "sfWarehouse": self._get_secret('sfWarehouse'),
             "sfRole": self._get_secret('sfRole'),
         }
-        options += self._get_authentication_options()
+        options = options | self._get_snowflake_auth_options()
 
         return options
 
-    def _get_authentication_options(self):
+    def _get_snowflake_auth_options(self):
         try:
             key = SnowflakeDataSource.get_private_key(
                 self._get_secret('pem_private_key'),
